@@ -115,7 +115,7 @@ public:
   void solveStereoOdometry(const cv::Mat &projection_matrix_l,
                            const cv::Mat &projection_matrix_r,
                            tf2::Transform &cam0_curr_T_cam0_prev,
-                           const int stereo_threshold = 4);
+                           const float stereo_threshold = 4.0);
 
   cv::Mat visualizeMatches(const MatchType match_type);
 
@@ -365,14 +365,13 @@ void ClassicFeatureFrontEnd::solve5PointsRANSAC(
            "%.4f, and angle = %.4f",
            q_tf2.getAxis().getX(), q_tf2.getAxis().getY(),
            q_tf2.getAxis().getZ(), q_tf2.getAngle());
-  ROS_INFO(
-      "From RANSAC, frame1_T_frame0.translation(): t = %.4f, %.4f, %.4f",
-      t.at<double>(0, 0), t.at<double>(1, 0), t.at<double>(2, 0));
+  ROS_INFO("From RANSAC, frame1_T_frame0.translation(): t = %.4f, %.4f, %.4f",
+           t.at<double>(0, 0), t.at<double>(1, 0), t.at<double>(2, 0));
 }
 
 void ClassicFeatureFrontEnd::solveStereoOdometry(
     const cv::Mat &projection_matrix_l, const cv::Mat &projection_matrix_r,
-    tf2::Transform &cam0_curr_T_cam0_prev, const int stereo_threshold) {
+    tf2::Transform &cam0_curr_T_cam0_prev, const float stereo_threshold) {
   const std::vector<cv::DMatch> &cv_Dmatches_curr_stereo =
       cv_DMatches_list[CURR_LEFT_CURR_RIGHT];
   const std::vector<cv::DMatch> &cv_Dmatches_inter_left =
@@ -389,7 +388,7 @@ void ClassicFeatureFrontEnd::solveStereoOdometry(
   std::vector<std::pair<int, int>> index_pairs_curr_left_to_prev_left;
   std::transform(cv_Dmatches_inter_left.begin(), cv_Dmatches_inter_left.end(),
                  std::back_inserter(index_pairs_curr_left_to_prev_left),
-                 [](const cv::DMatch &cv_Dmatch) ->std::pair<int, int> {
+                 [](const cv::DMatch &cv_Dmatch) -> std::pair<int, int> {
                    return {cv_Dmatch.trainIdx, cv_Dmatch.queryIdx};
                  });
 
@@ -420,7 +419,8 @@ void ClassicFeatureFrontEnd::solveStereoOdometry(
         keypoints_dq.end()[CURR_RIGHT][cv_Dmatch.trainIdx].pt;
 
     if (std::abs(keypoint_curr_left.y - keypoint_curr_right.y) >
-        stereo_threshold)
+            stereo_threshold ||
+        std::abs(keypoint_curr_left.x - keypoint_curr_right.x) < 0.25f)
       continue;
 
     const cv::Point2f &keypoint_prev_left =
