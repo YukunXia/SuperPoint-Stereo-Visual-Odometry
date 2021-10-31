@@ -142,6 +142,9 @@ private:
   cv::Ptr<cv::FeatureDetector> detector_;
   cv::Ptr<cv::DescriptorExtractor> extractor_;
   cv::Ptr<cv::DescriptorMatcher> matcher_;
+
+  cv::Mat r_vec_pred = cv::Mat::zeros(3, 1, CV_32FC1);
+  cv::Mat t_pred = cv::Mat::zeros(3, 1, CV_32FC1);
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -452,9 +455,22 @@ void ClassicFeatureFrontEnd::solveStereoOdometry(
   const cv::Mat intrinsics_l = projection_matrix_l.colRange(0, 3);
   cv::Mat inliers;
   const cv::Mat distortion = cv::Mat::zeros(4, 1, CV_32FC1);
-  cv::Mat r_vec, t;
-  cv::solvePnPRansac(curr_left_point3d, keypoints_prev_left, intrinsics_l,
-                     distortion, r_vec, t, false, 500, 2.0, 0.999, inliers);
+  cv::Mat r_vec = r_vec_pred.clone();
+  cv::Mat t = t_pred.clone();
+  bool pnp_result = cv::solvePnPRansac(
+      curr_left_point3d, keypoints_prev_left, intrinsics_l, distortion, r_vec,
+      t, false, 500, 2.0, 0.999, inliers, cv::SOLVEPNP_EPNP);
+
+  if (!pnp_result) {
+    ROS_ERROR("solvePnPRansac failed! Identity transformation will be applied.");
+    ROS_INFO("keypoints_curr_left size = %lu", keypoints_curr_left.size());
+    ROS_INFO("inliers rows = %d, cols = %d", inliers.rows, inliers.cols);
+    r_vec = r_vec_pred.clone();
+    t = t_pred.clone();
+  } else {
+    r_vec_pred = r_vec.clone();
+    t_pred = t.clone();
+  }
 
   cv::Mat R;
   cv::Rodrigues(r_vec, R);
@@ -471,14 +487,15 @@ void ClassicFeatureFrontEnd::solveStereoOdometry(
   cam0_prev_T_cam0_curr.setOrigin(
       tf2::Vector3(t.at<double>(0, 0), t.at<double>(1, 0), t.at<double>(2, 0)));
 
-  tf2::Quaternion q_tf2 = cam0_prev_T_cam0_curr.getRotation();
-  ROS_INFO("From PnP, cam0_prev_T_cam0_curr.rotation():\n axis = %.4f, %.4f, "
-           "%.4f, and angle = %.4f",
-           q_tf2.getAxis().getX(), q_tf2.getAxis().getY(),
-           q_tf2.getAxis().getZ(), q_tf2.getAngle());
-  ROS_INFO(
-      "From PnP, cam0_prev_T_cam0_curr.translation():\n t = %.4f, %.4f, %.4f",
-      t.at<double>(0, 0), t.at<double>(1, 0), t.at<double>(2, 0));
+  // tf2::Quaternion q_tf2 = cam0_prev_T_cam0_curr.getRotation();
+  // ROS_INFO("From PnP, cam0_prev_T_cam0_curr.rotation():\n axis = %.4f, %.4f,
+  // "
+  //          "%.4f, and angle = %.4f",
+  //          q_tf2.getAxis().getX(), q_tf2.getAxis().getY(),
+  //          q_tf2.getAxis().getZ(), q_tf2.getAngle());
+  // ROS_INFO(
+  //     "From PnP, cam0_prev_T_cam0_curr.translation():\n t = %.4f, %.4f,
+  //     %.4f", t.at<double>(0, 0), t.at<double>(1, 0), t.at<double>(2, 0));
 
   cam0_curr_T_cam0_prev = cam0_prev_T_cam0_curr.inverse();
 }
