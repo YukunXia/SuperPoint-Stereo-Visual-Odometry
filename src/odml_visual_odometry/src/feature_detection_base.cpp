@@ -4,6 +4,26 @@
 ///////////////////////////////Abstract_classe_func_def////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 
+void FeatureFrontEnd::initMatcher() {
+  // Reference: https://docs.opencv.org/master/dc/dc3/tutorial_py_matcher.html
+  if (matcher_type_ == MatcherType::BF) {
+    int norm_type;
+    if (descriptor_type_ == DescriptorType::AKAZE ||
+        descriptor_type_ == DescriptorType::BRISK ||
+        descriptor_type_ == DescriptorType::ORB) {
+      norm_type = cv::NORM_HAMMING;
+    } else if (descriptor_type_ == DescriptorType::SIFT ||
+               descriptor_type_ == DescriptorType::SuperPoint) {
+      norm_type = cv::NORM_L2;
+    } else {
+      ROS_ERROR("[initMatcher] Decscriptor is not implemented");
+    }
+    matcher_ = cv::BFMatcher::create(norm_type, cross_check_);
+  } else if (matcher_type_ == MatcherType::FLANN) {
+    matcher_ = cv::DescriptorMatcher::create(cv::DescriptorMatcher::FLANNBASED);
+  }
+}
+
 void FeatureFrontEnd::solveStereoOdometry(const cv::Mat &projection_matrix_l,
                                           const cv::Mat &projection_matrix_r,
                                           tf2::Transform &cam0_curr_T_cam0_prev,

@@ -14,20 +14,37 @@
 ///////////////////////////Type_and_macro_definitions//////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 
-enum class DetectorType { ShiTomasi, BRISK, FAST, ORB, AKAZE, SIFT };
+enum class DetectorType {
+  ShiTomasi,
+  BRISK,
+  FAST,
+  ORB,
+  AKAZE,
+  SIFT,
+  SuperPoint
+};
 // static const std::string DetectorType_str[] = {"ShiTomasi", "BRISK", "FAST",
 //                                                "ORB",       "AKAZE", "SIFT"};
 const std::unordered_map<std::string, DetectorType> detector_name_to_type = {
-    {"ShiTomasi", DetectorType::ShiTomasi}, {"BRISK", DetectorType::BRISK},
-    {"FAST", DetectorType::FAST},           {"ORB", DetectorType::ORB},
-    {"AKAZE", DetectorType::AKAZE},         {"SIFT", DetectorType::SIFT}};
-enum class DescriptorType { BRISK, ORB, BRIEF, AKAZE, FREAK, SIFT };
+    {"ShiTomasi", DetectorType::ShiTomasi},
+    {"BRISK", DetectorType::BRISK},
+    {"FAST", DetectorType::FAST},
+    {"ORB", DetectorType::ORB},
+    {"AKAZE", DetectorType::AKAZE},
+    {"SIFT", DetectorType::SIFT},
+    {"SuperPoint", DetectorType::SuperPoint}};
+enum class DescriptorType { BRISK, ORB, BRIEF, AKAZE, FREAK, SIFT, SuperPoint };
 // static const std::string DescriptorType_str[] = {"BRISK", "ORB",   "BRIEF",
-//                                                  "AKAZE", "FREAK", "SIFT"};
+//                                                  "AKAZE", "FREAK", "SIFT",
+//                                                  "SUPERPOINT"};
 const std::unordered_map<std::string, DescriptorType> descriptor_name_to_type =
-    {{"BRISK", DescriptorType::BRISK}, {"ORB", DescriptorType::ORB},
-     {"BRIEF", DescriptorType::BRIEF}, {"AKAZE", DescriptorType::AKAZE},
-     {"FREAK", DescriptorType::FREAK}, {"SIFT", DescriptorType::SIFT}};
+    {{"BRISK", DescriptorType::BRISK},
+     {"ORB", DescriptorType::ORB},
+     {"BRIEF", DescriptorType::BRIEF},
+     {"AKAZE", DescriptorType::AKAZE},
+     {"FREAK", DescriptorType::FREAK},
+     {"SIFT", DescriptorType::SIFT},
+     {"SuperPoint", DescriptorType::SuperPoint}};
 enum class MatcherType { BF, FLANN };
 const std::unordered_map<std::string, MatcherType> matcher_name_to_type = {
     {"BF", MatcherType::BF},
@@ -45,9 +62,9 @@ enum MatchType {
   MATCH_TYPE_NUM = 2
 };
 const std::string MatchType_str[] = {"CURR_LEFT_CURR_RIGHT",
-                                            "PREV_LEFT_CURR_LEFT"};
-const std::array<std::pair<int, int>, MATCH_TYPE_NUM> match_type_to_positions = {
-    std::pair<int, int>(-2, -1), std::pair<int, int>(-4, -2)};
+                                     "PREV_LEFT_CURR_LEFT"};
+const std::array<std::pair<int, int>, MATCH_TYPE_NUM> match_type_to_positions =
+    {std::pair<int, int>(-2, -1), std::pair<int, int>(-4, -2)};
 
 enum ImagePosition {
   PREV_LEFT = -4,
@@ -62,11 +79,14 @@ enum ImagePosition {
 
 class FeatureFrontEnd {
 public:
-  FeatureFrontEnd(const MatcherType matcher_type,
+  FeatureFrontEnd(const DetectorType detector_type,
+                  const DescriptorType descriptor_type,
+                  const MatcherType matcher_type,
                   const SelectorType selector_type, const bool cross_check)
-      : matcher_type_(matcher_type), selector_type_(selector_type),
+      : detector_type_(detector_type), descriptor_type_(descriptor_type),
+        matcher_type_(matcher_type), selector_type_(selector_type),
         cross_check_(cross_check) {}
-  virtual void initMatcher() = 0;
+  void initMatcher();
   virtual void addStereoImagePair(const cv::Mat &img_l,
                                   const cv::Mat &img_r) = 0;
   void solveStereoOdometry(const cv::Mat &projection_matrix_l,
@@ -84,6 +104,8 @@ protected:
   const int IMG_HEIGHT = 375;
   const int IMG_WIDTH = 1242;
 
+  const DetectorType detector_type_;
+  const DescriptorType descriptor_type_;
   const MatcherType matcher_type_;
   const float knn_threshold_ = 0.8;
   const SelectorType selector_type_;
@@ -102,9 +124,8 @@ protected:
 class ClassicFeatureFrontEnd : public FeatureFrontEnd {
 public:
   ClassicFeatureFrontEnd()
-      : detector_type_(DetectorType::ShiTomasi),
-        descriptor_type_(DescriptorType::ORB),
-        FeatureFrontEnd(MatcherType::BF, SelectorType::NN, true) {
+      : FeatureFrontEnd(DetectorType::ShiTomasi, DescriptorType::ORB,
+                        MatcherType::BF, SelectorType::NN, true) {
     initDetector();
     initDescriptor();
     initMatcher();
@@ -115,8 +136,8 @@ public:
                          const MatcherType matcher_type,
                          const SelectorType selector_type,
                          const bool cross_check)
-      : detector_type_(detector_type), descriptor_type_(descriptor_type),
-        FeatureFrontEnd(matcher_type, selector_type, cross_check) {
+      : FeatureFrontEnd(detector_type, descriptor_type, matcher_type,
+                        selector_type, cross_check) {
     initDetector();
     initDescriptor();
     initMatcher();
@@ -124,7 +145,6 @@ public:
 
   void initDetector();
   void initDescriptor();
-  void initMatcher();
 
   void addStereoImagePair(const cv::Mat &img_l, const cv::Mat &img_r);
 
@@ -144,9 +164,6 @@ public:
   void matchDescriptors(const MatchType match_type);
 
 private:
-  const DetectorType detector_type_;
-  const DescriptorType descriptor_type_;
-
   cv::Ptr<cv::FeatureDetector> detector_;
   cv::Ptr<cv::DescriptorExtractor> extractor_;
 };
@@ -154,11 +171,18 @@ private:
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 
-
 class NeuralNetworkFeatureFrontEnd : public FeatureFrontEnd {
 public:
+  NeuralNetworkFeatureFrontEnd()
+      : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
+                        MatcherType::BF, SelectorType::NN, true) {}
+
+  NeuralNetworkFeatureFrontEnd(const MatcherType matcher_type,
+                               const SelectorType selector_type,
+                               const bool cross_check)
+      : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
+                        matcher_type, selector_type, cross_check) {}
   void addStereoImagePair(const cv::Mat &img_l, const cv::Mat &img_r);
 
 private:
 };
-

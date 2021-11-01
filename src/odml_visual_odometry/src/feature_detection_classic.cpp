@@ -80,25 +80,6 @@ void ClassicFeatureFrontEnd::initDescriptor() {
   }
 }
 
-void ClassicFeatureFrontEnd::initMatcher() {
-  // Reference: https://docs.opencv.org/master/dc/dc3/tutorial_py_matcher.html
-  if (matcher_type_ == MatcherType::BF) {
-    int norm_type;
-    if (descriptor_type_ == DescriptorType::AKAZE or
-        descriptor_type_ == DescriptorType::BRISK or
-        descriptor_type_ == DescriptorType::ORB) {
-      norm_type = cv::NORM_HAMMING;
-    } else if (descriptor_type_ == DescriptorType::SIFT) {
-      norm_type = cv::NORM_L2;
-    } else {
-      ROS_ERROR("[initMatcher] Decscriptor is not implemented");
-    }
-    matcher_ = cv::BFMatcher::create(norm_type, cross_check_);
-  } else if (matcher_type_ == MatcherType::FLANN) {
-    matcher_ = cv::DescriptorMatcher::create(cv::DescriptorMatcher::FLANNBASED);
-  }
-}
-
 void ClassicFeatureFrontEnd::addStereoImagePair(const cv::Mat &img_l,
                                                 const cv::Mat &img_r) {
   images_dq.push_back(img_l);
