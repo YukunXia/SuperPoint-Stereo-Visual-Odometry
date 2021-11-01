@@ -132,26 +132,28 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
 )
 
-## Declare a C++ library
-# add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/odml_visual_odometry.cpp
-# )
+# Declare a C++ library
+add_library(feature_detection
+  src/feature_detection_base.cpp
+  src/feature_detection_classic.cpp
+  src/feature_detection_neural_network.cpp
+)
 
-## Add cmake target dependencies of the library
-## as an example, code may need to be generated before libraries
-## either from message generation or dynamic reconfigure
-# add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+# Add cmake target dependencies of the library
+# as an example, code may need to be generated before libraries
+# either from message generation or dynamic reconfigure
+add_dependencies(feature_detection ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(feature_detection
+  ${catkin_LIBRARIES} 
+  ${OpenCV_LIBS}
+)
+set_target_properties(feature_detection PROPERTIES PUBLIC_HEADER include/${PROJECT_NAME}/feature_detection.hpp)
+
 
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(visual_odometry_node src/visual_odometry_node.cpp)
-
-## Rename C++ executable without prefix
-## The above recommended prefix causes long target names, the following renames the
-## target back to the shorter version for ease of user use
-## e.g. "rosrun someones_pkg node" instead of "rosrun someones_pkg someones_pkg_node"
-# set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
@@ -161,6 +163,7 @@ add_dependencies(visual_odometry_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${odml
 target_link_libraries(visual_odometry_node
   ${catkin_LIBRARIES} 
   ${OpenCV_LIBS}
+  feature_detection
 )
 
 #############
@@ -192,11 +195,14 @@ target_link_libraries(visual_odometry_node
 # )
 
 ## Mark cpp header files for installation
-# install(DIRECTORY include/${PROJECT_NAME}/
-#   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
-#   FILES_MATCHING PATTERN "*.h"
+install(
+  DIRECTORY include/${PROJECT_NAME}/
+  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+  FILES_MATCHING 
+    PATTERN "*.hpp"
+    PATTERN "*.h"
 #   PATTERN ".svn" EXCLUDE
-# )
+)
 
 ## Mark other files for installation (e.g. launch and bag files, etc.)
 # install(FILES
