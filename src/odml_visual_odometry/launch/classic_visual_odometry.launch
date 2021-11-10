@@ -1,9 +1,26 @@
 <launch>
+  <arg name="is_classic" default="true" />
+
+  <group if="$(arg is_classic)">
     <node pkg="odml_visual_odometry" type="visual_odometry_node" name="visual_odometry_node" output="screen">
-        <param name="is_classic" type="bool" value="true" />
+        <param name="is_classic" type="bool" value="$(arg is_classic)" />
         <param name="detector_type" type="string" value="ORB" />
         <param name="descriptor_type" type="string" value="ORB" />
         <param name="matcher_type" type="string" value="BF" />
         <param name="selector_type" type="string" value="NN" />
     </node>
+  </group>
+
+  <group unless="$(arg is_classic)">
+    <node pkg="odml_visual_odometry" type="visual_odometry_node" name="visual_odometry_node" output="screen">
+        <param name="is_classic" type="bool" value="$(arg is_classic)" />
+        <param name="detector_type" type="string" value="SuperPoint" />
+        <param name="descriptor_type" type="string" value="SuperPoint" />
+        <param name="matcher_type" type="string" value="BF" />
+        <param name="selector_type" type="string" value="NN" />
+        <param name="image_height" type="int" value="120" />
+        <param name="image_width" type="int" value="396" />
+        <param name="model_name_prefix" type="string" value="superpoint_pretrained" />
+    </node>
+  </group>
 </launch>

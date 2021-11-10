@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0.2)
 project(odml_visual_odometry)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-add_compile_options(-std=c++11 -O3)
+add_compile_options(-std=c++17 -O3)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -10,6 +10,8 @@ add_compile_options(-std=c++11 -O3)
 
 find_package(OpenCV 4.5.1)
 
+find_package(CUDA REQUIRED)
+message("-- CUDA version: ${CUDA_VERSION}")
 
 find_package(catkin REQUIRED COMPONENTS
   actionlib_msgs
@@ -22,6 +24,7 @@ find_package(catkin REQUIRED COMPONENTS
   odml_data_processing
   image_transport
   tf2_ros
+  roslib
 )
 
 ## System dependencies are found with CMake's conventions
@@ -132,6 +135,15 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
 )
 
+
+# cuda
+include_directories(/usr/local/cuda/include)
+link_directories(/usr/local/cuda/lib64)
+# tensorrt
+include_directories(/usr/include/x86_64-linux-gnu/)
+link_directories(/usr/lib/x86_64-linux-gnu/)
+
+
 # Declare a C++ library
 add_library(feature_detection
   src/feature_detection_base.cpp
@@ -146,6 +158,7 @@ add_dependencies(feature_detection ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_
 target_link_libraries(feature_detection
   ${catkin_LIBRARIES} 
   ${OpenCV_LIBS}
+  nvinfer cudart
 )
 set_target_properties(feature_detection PROPERTIES PUBLIC_HEADER include/${PROJECT_NAME}/feature_detection.hpp)
 
@@ -161,6 +174,19 @@ add_dependencies(visual_odometry_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${odml
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(visual_odometry_node
+  ${catkin_LIBRARIES} 
+  ${OpenCV_LIBS}
+  feature_detection
+)
+
+
+add_executable(test_superpoint src/test_superpoint.cpp)
+add_dependencies(
+  test_superpoint 
+  ${${PROJECT_NAME}_EXPORTED_TARGETS} 
+  ${odml_data_processing_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS}
+)
+target_link_libraries(test_superpoint
   ${catkin_LIBRARIES} 
   ${OpenCV_LIBS}
   feature_detection

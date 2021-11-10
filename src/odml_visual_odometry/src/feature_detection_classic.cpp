@@ -1,7 +1,5 @@
 #include <odml_visual_odometry/feature_detection.hpp>
 
-
-
 ///////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////classic_class_functions_def///////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -80,8 +78,19 @@ void ClassicFeatureFrontEnd::initDescriptor() {
   }
 }
 
-void ClassicFeatureFrontEnd::addStereoImagePair(const cv::Mat &img_l,
-                                                const cv::Mat &img_r) {
+void ClassicFeatureFrontEnd::addStereoImagePair(
+    const cv::Mat &img_l, const cv::Mat &img_r,
+    const cv::Mat &projection_matrix_l, const cv::Mat &projection_matrix_r) {
+  if (img_l.rows != img_r.rows || img_l.cols != img_l.cols) {
+    ROS_ERROR("input images shape doesn't match! img_l's shape = (%d, %d), "
+              "while img_r's shape = (%d, %d)",
+              img_l.rows, img_l.cols, img_r.rows, img_r.cols);
+    return;
+  }
+
+  projection_matrix_l_ = projection_matrix_l.clone();
+  projection_matrix_r_ = projection_matrix_r.clone();
+
   images_dq.push_back(img_l);
   images_dq.push_back(img_r);
 

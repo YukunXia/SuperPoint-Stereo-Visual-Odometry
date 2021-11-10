@@ -24,9 +24,7 @@ void FeatureFrontEnd::initMatcher() {
   }
 }
 
-void FeatureFrontEnd::solveStereoOdometry(const cv::Mat &projection_matrix_l,
-                                          const cv::Mat &projection_matrix_r,
-                                          tf2::Transform &cam0_curr_T_cam0_prev,
+void FeatureFrontEnd::solveStereoOdometry(tf2::Transform &cam0_curr_T_cam0_prev,
                                           const float stereo_threshold) {
   const std::vector<cv::DMatch> &cv_Dmatches_curr_stereo =
       cv_DMatches_list[CURR_LEFT_CURR_RIGHT];
@@ -92,7 +90,7 @@ void FeatureFrontEnd::solveStereoOdometry(const cv::Mat &projection_matrix_l,
 
   // triangulation
   cv::Mat curr_left_point4d;
-  cv::triangulatePoints(projection_matrix_l, projection_matrix_r,
+  cv::triangulatePoints(projection_matrix_l_, projection_matrix_r_,
                         keypoints_curr_left, keypoints_curr_right,
                         curr_left_point4d);
   // curr_left_point4d: 64FC1 4xN => 64FC1 Nx4
@@ -105,7 +103,7 @@ void FeatureFrontEnd::solveStereoOdometry(const cv::Mat &projection_matrix_l,
   cv::convertPointsFromHomogeneous(curr_left_point4d, curr_left_point3d);
 
   // PnP
-  const cv::Mat intrinsics_l = projection_matrix_l.colRange(0, 3);
+  const cv::Mat intrinsics_l = projection_matrix_l_.colRange(0, 3);
   cv::Mat inliers;
   const cv::Mat distortion = cv::Mat::zeros(4, 1, CV_32FC1);
   cv::Mat r_vec = r_vec_pred.clone();

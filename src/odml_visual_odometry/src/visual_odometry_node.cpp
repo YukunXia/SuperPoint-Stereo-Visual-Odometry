@@ -9,8 +9,8 @@
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/Image.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-#include <tf2_ros/transform_listener.h>
 #include <tf2_ros/static_transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
 
 #include <odml_data_processing/kitti_data_loaderActionGoal.h>
 #include <odml_visual_odometry/feature_detection.hpp>
@@ -53,7 +53,7 @@ cv_bridge::CvImagePtr cv_ptr_r;
 bool first_frame = true;
 tf2::Transform world_T_base_curr = tf2::Transform::getIdentity();
 
-std::shared_ptr<ClassicFeatureFrontEnd> classic_feature_front_end_ptr;
+std::shared_ptr<FeatureFrontEnd> feature_front_end_ptr;
 
 cv_bridge::CvImage matches_viz_cvbridge;
 std::array<image_transport::Publisher, MATCH_TYPE_NUM> pub_matches_img_list;
@@ -90,20 +90,17 @@ cameraInfoToPMatrix(const sensor_msgs::CameraInfo::ConstPtr &camera_info_msg) {
 }
 
 void publishOdometry(const tf2::Transform &cam0_curr_T_cam0_prev) {
-  const tf2::Transform base_prev_T_base_curr = base_T_cam0 * cam0_curr_T_cam0_prev.inverse() * base_T_cam0.inverse();
+  const tf2::Transform base_prev_T_base_curr =
+      base_T_cam0 * cam0_curr_T_cam0_prev.inverse() * base_T_cam0.inverse();
   world_T_base_curr *= base_prev_T_base_curr;
 
   visual_odom_msg.header.frame_id = "map";
   visual_odom_msg.child_frame_id = "visual_odom";
   visual_odom_msg.header.stamp = ros::Time::now(); // image_msg->header.stamp;
-  visual_odom_msg.pose.pose.orientation.x =
-      world_T_base_curr.getRotation().x();
-  visual_odom_msg.pose.pose.orientation.y =
-      world_T_base_curr.getRotation().y();
-  visual_odom_msg.pose.pose.orientation.z =
-      world_T_base_curr.getRotation().z();
-  visual_odom_msg.pose.pose.orientation.w =
-      world_T_base_curr.getRotation().w();
+  visual_odom_msg.pose.pose.orientation.x = world_T_base_curr.getRotation().x();
+  visual_odom_msg.pose.pose.orientation.y = world_T_base_curr.getRotation().y();
+  visual_odom_msg.pose.pose.orientation.z = world_T_base_curr.getRotation().z();
+  visual_odom_msg.pose.pose.orientation.w = world_T_base_curr.getRotation().w();
   visual_odom_msg.pose.pose.position.x = world_T_base_curr.getOrigin().x();
   visual_odom_msg.pose.pose.position.y = world_T_base_curr.getOrigin().y();
   visual_odom_msg.pose.pose.position.z = world_T_base_curr.getOrigin().z();
@@ -128,6 +125,7 @@ void stereoCallback(
     return;
   }
 
+  // MONO8 => CV_8UC1 cv::Mat
   cv_ptr_l =
       cv_bridge::toCvCopy(left_image_msg, sensor_msgs::image_encodings::MONO8);
   cv_ptr_r =
@@ -138,12 +136,12 @@ void stereoCallback(
   // TODO: place assertion here
   const cv::Mat img_l_intrinsics = cameraInfoToKMatrix(left_camera_info_msg);
   const cv::Mat img_r_intrinsics = cameraInfoToKMatrix(right_camera_info_msg);
-  const cv::Mat img_l_projection_matrix =
-      cameraInfoToPMatrix(left_camera_info_msg);
-  const cv::Mat img_r_projection_matrix =
+  const cv::Mat projection_matrix_l = cameraInfoToPMatrix(left_camera_info_msg);
+  const cv::Mat projection_matrix_r =
       cameraInfoToPMatrix(right_camera_info_msg);
 
-  classic_feature_front_end_ptr->addStereoImagePair(img_l, img_r);
+  feature_front_end_ptr->addStereoImagePair(img_l, img_r, projection_matrix_l,
+                                            projection_matrix_r);
 
   tf2::Transform cam0_curr_T_cam0_prev = tf2::Transform::getIdentity();
 
@@ -155,22 +153,21 @@ void stereoCallback(
 
   for (int i = 0; i < MATCH_TYPE_NUM; ++i) {
     const MatchType match_type = static_cast<MatchType>(i);
-    classic_feature_front_end_ptr->matchDescriptors(match_type);
+    feature_front_end_ptr->matchDescriptors(match_type);
     // classic_feature_front_end_ptr->solve5PointsRANSAC(match_type,
     // img_l_intrinsics, cam0_curr_T_cam0_prev);
     // For visualization
     std_msgs::Header header;
     header.stamp = ros::Time::now();
     const cv::Mat match_image =
-        classic_feature_front_end_ptr->visualizeMatches(match_type);
+        feature_front_end_ptr->visualizeMatches(match_type);
     matches_viz_cvbridge = cv_bridge::CvImage(
         header, sensor_msgs::image_encodings::RGB8, match_image);
     // TODO: try compressed image
     pub_matches_img_list[match_type].publish(matches_viz_cvbridge.toImageMsg());
   }
 
-  classic_feature_front_end_ptr->solveStereoOdometry(
-      img_l_projection_matrix, img_r_projection_matrix, cam0_curr_T_cam0_prev);
+  feature_front_end_ptr->solveStereoOdometry(cam0_curr_T_cam0_prev);
 
   publishOdometry(cam0_curr_T_cam0_prev);
 }
@@ -192,7 +189,7 @@ void dataLodaerGoalCallback(
   tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_ptr);
   base_stamped_tf_cam0 = tf_buffer_ptr->lookupTransform(
       "base_link", "camera_gray_left", ros::Time(0), ros::Duration(3.0));
-      tf2::fromMsg(base_stamped_tf_cam0.transform, base_T_cam0);   
+  tf2::fromMsg(base_stamped_tf_cam0.transform, base_T_cam0);
   base_stamped_tf_cam0.header.frame_id = "base";
   base_stamped_tf_cam0.child_frame_id = "cam0";
   tf2_ros::StaticTransformBroadcaster static_broadcaster;
@@ -205,14 +202,57 @@ int main(int argc, char **argv) {
   ros::init(argc, argv, "visual_odometry_node");
 
   ros::NodeHandle nh_private = ros::NodeHandle("~");
-  std::string detector_type;
-  std::string descriptor_type;
-  std::string matcher_type;
-  std::string selector_type;
-  nh_private.getParam("detector_type", detector_type);
-  nh_private.getParam("descriptor_type", descriptor_type);
-  nh_private.getParam("matcher_type", matcher_type);
-  nh_private.getParam("selector_type", selector_type);
+  bool is_classic;
+  nh_private.getParam("is_classic", is_classic);
+
+  if (is_classic) {
+    std::string detector_type;
+    std::string descriptor_type;
+    std::string matcher_type;
+    std::string selector_type;
+    nh_private.getParam("detector_type", detector_type);
+    nh_private.getParam("descriptor_type", descriptor_type);
+    nh_private.getParam("matcher_type", matcher_type);
+    nh_private.getParam("selector_type", selector_type);
+    feature_front_end_ptr = std::make_shared<ClassicFeatureFrontEnd>(
+        detector_name_to_type.at(detector_type),
+        descriptor_name_to_type.at(descriptor_type),
+        matcher_name_to_type.at(matcher_type),
+        selector_name_to_type.at(selector_type),
+        true // cross check. only used in KNN mode
+    );
+  } else {
+    std::string detector_type;
+    std::string descriptor_type;
+    nh_private.getParam("detector_type", detector_type);
+    nh_private.getParam("descriptor_type", descriptor_type);
+    if (detector_type == "SuperPoint" && descriptor_type == "SuperPoint") {
+      std::string matcher_type;
+      std::string selector_type;
+      std::string model_name_prefix;
+      int image_height;
+      int image_width;
+      nh_private.getParam("matcher_type", matcher_type);
+      nh_private.getParam("selector_type", selector_type);
+      nh_private.getParam("model_name_prefix", model_name_prefix);
+      nh_private.getParam("image_height", image_height);
+      nh_private.getParam("image_width", image_width);
+      if (image_height % 8 != 0 || image_width % 8 != 0) {
+        ROS_ERROR("image_height(%d) or image_width(%d) is indivisble by 8",
+                  image_height, image_width);
+        return 1;
+      }
+      feature_front_end_ptr = std::make_shared<SuperPointFeatureFrontEnd>(
+          matcher_name_to_type.at(matcher_type),
+          selector_name_to_type.at(selector_type),
+          true, // cross check. only used in KNN mode
+          model_name_prefix, image_height, image_width);
+    } else {
+      ROS_ERROR("Detector(%s) or descriptor(%s) not implemented",
+                detector_type.c_str(), descriptor_type.c_str());
+      return 1;
+    }
+  }
 
   ros::NodeHandle nh;
 
@@ -229,14 +269,6 @@ int main(int argc, char **argv) {
   sub_camera01_ptr =
       std::make_shared<message_filters::Subscriber<sensor_msgs::CameraInfo>>(
           nh, "/kitti/camera_gray_right/camera_info", 10);
-
-  classic_feature_front_end_ptr = std::make_shared<ClassicFeatureFrontEnd>(
-      detector_name_to_type.at(detector_type),
-      descriptor_name_to_type.at(descriptor_type),
-      matcher_name_to_type.at(matcher_type),
-      selector_name_to_type.at(selector_type),
-      true // cross check. only used in KNN mode
-  );
 
   visual_odom_msg_pub = nh.advertise<nav_msgs::Odometry>(
       "/odml_visual_odometry/visual_odom", 100);

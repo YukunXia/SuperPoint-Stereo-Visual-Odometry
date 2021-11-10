@@ -3,12 +3,16 @@
 #include <ros/ros.h>
 #include <tf2/LinearMath/Transform.h>
 
+#include <NvInfer.h>
+#include <cuda_runtime_api.h>
 #include <opencv4/opencv2/opencv.hpp>
 
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#include <odml_visual_odometry/logging.h>
 
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////Type_and_macro_definitions//////////////////////////////////
@@ -87,11 +91,11 @@ public:
         matcher_type_(matcher_type), selector_type_(selector_type),
         cross_check_(cross_check) {}
   void initMatcher();
-  virtual void addStereoImagePair(const cv::Mat &img_l,
-                                  const cv::Mat &img_r) = 0;
-  void solveStereoOdometry(const cv::Mat &projection_matrix_l,
-                           const cv::Mat &projection_matrix_r,
-                           tf2::Transform &cam0_curr_T_cam0_prev,
+  virtual void addStereoImagePair(const cv::Mat &img_l, const cv::Mat &img_r,
+                                  const cv::Mat &projection_matrix_l,
+                                  const cv::Mat &projection_matrix_r) = 0;
+  virtual void matchDescriptors(const MatchType match_type) = 0;
+  void solveStereoOdometry(tf2::Transform &cam0_curr_T_cam0_prev,
                            const float stereo_threshold = 4.0f);
   cv::Mat visualizeMatches(const MatchType match_type);
 
@@ -101,9 +105,6 @@ public:
   std::array<std::vector<cv::DMatch>, MATCH_TYPE_NUM> cv_DMatches_list;
 
 protected:
-  const int IMG_HEIGHT = 375;
-  const int IMG_WIDTH = 1242;
-
   const DetectorType detector_type_;
   const DescriptorType descriptor_type_;
   const MatcherType matcher_type_;
@@ -112,6 +113,9 @@ protected:
   const bool cross_check_;
 
   cv::Ptr<cv::DescriptorMatcher> matcher_;
+
+  cv::Mat projection_matrix_l_;
+  cv::Mat projection_matrix_r_;
 
   cv::Mat r_vec_pred = cv::Mat::zeros(3, 1, CV_32FC1);
   cv::Mat t_pred = cv::Mat::zeros(3, 1, CV_32FC1);
@@ -146,7 +150,9 @@ public:
   void initDetector();
   void initDescriptor();
 
-  void addStereoImagePair(const cv::Mat &img_l, const cv::Mat &img_r);
+  void addStereoImagePair(const cv::Mat &img_l, const cv::Mat &img_r,
+                          const cv::Mat &projection_matrix_l,
+                          const cv::Mat &projection_matrix_r);
 
   inline std::vector<cv::KeyPoint> detectKeypoints(const cv::Mat &img) {
     std::vector<cv::KeyPoint> keypoints;
@@ -171,18 +177,90 @@ private:
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 
-class NeuralNetworkFeatureFrontEnd : public FeatureFrontEnd {
+class SuperPointFeatureFrontEnd : public FeatureFrontEnd {
 public:
-  NeuralNetworkFeatureFrontEnd()
+  SuperPointFeatureFrontEnd()
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
-                        MatcherType::BF, SelectorType::NN, true) {}
+                        MatcherType::BF, SelectorType::NN, true),
+        model_name_prefix_("superpoint_pretrained"), input_height_(120),
+        input_width_(396), input_size_(120 * 396),
+        output_det_size_(output_det_channel_ * 49 * 15),
+        output_desc_size_(output_desc_channel_ * 49 * 15), output_width_(49),
+        output_height_(15) {
+    initMatcher();
+    initIoPointers();
+    loadTrtEngine();
+  }
 
-  NeuralNetworkFeatureFrontEnd(const MatcherType matcher_type,
-                               const SelectorType selector_type,
-                               const bool cross_check)
+  SuperPointFeatureFrontEnd(const MatcherType matcher_type,
+                            const SelectorType selector_type,
+                            const bool cross_check,
+                            const std::string model_name_prefix_,
+                            const int input_height, const int input_width)
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
-                        matcher_type, selector_type, cross_check) {}
-  void addStereoImagePair(const cv::Mat &img_l, const cv::Mat &img_r);
+                        matcher_type, selector_type, cross_check),
+        input_height_(input_height), input_width_(input_width),
+        input_size_(input_height * input_width),
+        output_det_size_(output_det_channel_ * input_height * input_width / 64),
+        output_desc_size_(output_desc_channel_ * input_height * input_width /
+                          64),
+        output_width_(input_width/8), output_height_(input_height/8) {
+    assert(input_height%8 == 0 && input_width%8 == 0);
+
+    initMatcher();
+    initIoPointers();
+    loadTrtEngine();
+  }
+
+  void initIoPointers() {
+    input_data_ = std::unique_ptr<float[]>(new float[input_size_]);
+    output_det_data_ = std::unique_ptr<float[]>(new float[output_det_size_]);
+    output_desc_data_ = std::unique_ptr<float[]>(new float[output_desc_size_]);
+  }
+  void loadTrtEngine();
+
+  void preprocessImage(cv::Mat &img_l, cv::Mat &img_r);
+  void runNeuralNetwork(const cv::Mat &img, const bool debug_mode = false);
+  void addStereoImagePair(const cv::Mat &img_l, const cv::Mat &img_r,
+                          const cv::Mat &projection_matrix_l,
+                          const cv::Mat &projection_matrix_r);
+  void matchDescriptors(const MatchType match_type);
+
+  inline int getInputHeight() const { return input_height_; }
+  inline int getInputWidth() const { return input_width_; }
 
 private:
+  const std::string model_name_prefix_;
+
+  // total IO ports, 1 input, 2 final outputs
+  static constexpr int BUFFER_SIZE = 3;
+
+  const int input_height_;
+  // input_channel is 1
+  const int input_width_;
+  const int input_size_;
+
+  // output det size = output det channel num * output width * output height
+  const int output_det_size_;
+  const int output_det_channel_ = 65;
+  // output desc size = output desc channel num * output width * output height
+  const int output_desc_size_;
+  const int output_desc_channel_ = 256;
+  // width and height are shared by the detector and descriptor
+  const int output_width_;
+  const int output_height_;
+
+  sample::Logger g_logger_;
+
+  nvinfer1::ICudaEngine *engine_ = nullptr;
+  nvinfer1::IExecutionContext *context_ = nullptr;
+  nvinfer1::IRuntime *runtime_ = nullptr;
+  cudaStream_t stream_;
+  // buffers for input and output data
+  // std::vector<void *> buffers_ = std::vector<void *>(BUFFER_SIZE);
+  std::array<void *, BUFFER_SIZE> buffers_;
+  std::unique_ptr<float[]> input_data_ = nullptr;
+  std::unique_ptr<float[]> output_det_data_ = nullptr;
+  std::unique_ptr<float[]> output_desc_data_ = nullptr;
+  std::unique_ptr<char[]> trt_model_stream_ = nullptr;
 };
