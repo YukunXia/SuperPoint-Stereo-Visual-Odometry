@@ -177,16 +177,30 @@ private:
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 
+enum TensorRtPrecision {
+  TRT_FP32 = 0,
+  TRT_FP16 = 1,
+  NUM_TRT_PRECISION_CHOICES = 2
+};
+const std::unordered_map<std::string, TensorRtPrecision>
+    trt_precision_string2enum = {
+        {"FP32", TRT_FP32},
+        {"FP16", TRT_FP16},
+};
+const std::array<std::string, NUM_TRT_PRECISION_CHOICES>
+    trt_precision_enum2string = {"FP32", "FP16"};
+
 class SuperPointFeatureFrontEnd : public FeatureFrontEnd {
 public:
   SuperPointFeatureFrontEnd()
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
                         MatcherType::BF, SelectorType::NN, true),
-        model_name_prefix_("superpoint_pretrained"), input_height_(120),
-        input_width_(396), input_size_(120 * 396),
+        model_name_prefix_("superpoint_pretrained"), trt_precision_(TRT_FP32),
+        input_height_(120), input_width_(392), input_size_(120 * 392),
         output_det_size_(output_det_channel_ * 49 * 15),
         output_desc_size_(output_desc_channel_ * 49 * 15), output_width_(49),
-        output_height_(15) {
+        output_height_(15), conf_thresh_(0.015), dist_thresh_(4) {
+
     initMatcher();
     initIoPointers();
     loadTrtEngine();
@@ -195,17 +209,21 @@ public:
   SuperPointFeatureFrontEnd(const MatcherType matcher_type,
                             const SelectorType selector_type,
                             const bool cross_check,
-                            const std::string model_name_prefix_,
-                            const int input_height, const int input_width)
+                            const std::string model_name_prefix,
+                            const TensorRtPrecision trt_precision,
+                            const int input_height, const int input_width,
+                            const float conf_thresh, const int dist_thresh)
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
                         matcher_type, selector_type, cross_check),
+        model_name_prefix_(model_name_prefix), trt_precision_(TRT_FP32),
         input_height_(input_height), input_width_(input_width),
         input_size_(input_height * input_width),
         output_det_size_(output_det_channel_ * input_height * input_width / 64),
         output_desc_size_(output_desc_channel_ * input_height * input_width /
                           64),
-        output_width_(input_width/8), output_height_(input_height/8) {
-    assert(input_height%8 == 0 && input_width%8 == 0);
+        output_width_(input_width / 8), output_height_(input_height / 8),
+        conf_thresh_(conf_thresh), dist_thresh_(dist_thresh) {
+    assert(input_height % 8 == 0 && input_width % 8 == 0);
 
     initMatcher();
     initIoPointers();
@@ -220,7 +238,8 @@ public:
   void loadTrtEngine();
 
   void preprocessImage(cv::Mat &img_l, cv::Mat &img_r);
-  void runNeuralNetwork(const cv::Mat &img, const bool debug_mode = false);
+  void runNeuralNetwork(const cv::Mat &img);
+  std::vector<cv::KeyPoint> DebugOneBatchOutput();
   void addStereoImagePair(const cv::Mat &img_l, const cv::Mat &img_r,
                           const cv::Mat &projection_matrix_l,
                           const cv::Mat &projection_matrix_r);
@@ -231,6 +250,7 @@ public:
 
 private:
   const std::string model_name_prefix_;
+  const TensorRtPrecision trt_precision_;
 
   // total IO ports, 1 input, 2 final outputs
   static constexpr int BUFFER_SIZE = 3;
@@ -242,13 +262,18 @@ private:
 
   // output det size = output det channel num * output width * output height
   const int output_det_size_;
-  const int output_det_channel_ = 65;
+  static constexpr int output_det_channel_ = 65;
+  static constexpr int output_det_heatmap_factor_ = 8;
   // output desc size = output desc channel num * output width * output height
   const int output_desc_size_;
-  const int output_desc_channel_ = 256;
+  static constexpr int output_desc_channel_ = 256;
   // width and height are shared by the detector and descriptor
   const int output_width_;
   const int output_height_;
+
+  // postprocessing param
+  const float conf_thresh_;
+  const int dist_thresh_;
 
   sample::Logger g_logger_;
 

@@ -13,6 +13,8 @@ find_package(OpenCV 4.5.1)
 find_package(CUDA REQUIRED)
 message("-- CUDA version: ${CUDA_VERSION}")
 
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+
 find_package(catkin REQUIRED COMPONENTS
   actionlib_msgs
   cv_bridge
@@ -158,7 +160,7 @@ add_dependencies(feature_detection ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_
 target_link_libraries(feature_detection
   ${catkin_LIBRARIES} 
   ${OpenCV_LIBS}
-  nvinfer cudart
+  nvinfer cudart Eigen3::Eigen
 )
 set_target_properties(feature_detection PROPERTIES PUBLIC_HEADER include/${PROJECT_NAME}/feature_detection.hpp)
 

@@ -21,6 +21,9 @@
         <param name="image_height" type="int" value="120" />
         <param name="image_width" type="int" value="396" />
         <param name="model_name_prefix" type="string" value="superpoint_pretrained" />
+        <param name="trt_precision" type="string" value="FP32" />
+        <param name="conf_thresh" type="double" value="0.015" />
+        <param name="dist_thresh" type="int" value="4" />
     </node>
   </group>
 </launch>
