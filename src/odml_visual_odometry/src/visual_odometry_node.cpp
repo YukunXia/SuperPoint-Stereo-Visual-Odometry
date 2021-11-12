@@ -235,6 +235,7 @@ int main(int argc, char **argv) {
       int image_width;
       double conf_thresh;
       int dist_thresh;
+      int num_threads;
       nh_private.getParam("matcher_type", matcher_type);
       nh_private.getParam("selector_type", selector_type);
       nh_private.getParam("model_name_prefix", model_name_prefix);
@@ -243,6 +244,7 @@ int main(int argc, char **argv) {
       nh_private.getParam("image_width", image_width);
       nh_private.getParam("conf_thresh", conf_thresh);
       nh_private.getParam("dist_thresh", dist_thresh);
+      nh_private.getParam("num_threads", num_threads);
       if (image_height % 8 != 0 || image_width % 8 != 0) {
         ROS_ERROR("image_height(%d) or image_width(%d) is indivisble by 8",
                   image_height, image_width);
@@ -253,7 +255,7 @@ int main(int argc, char **argv) {
           selector_name_to_type.at(selector_type),
           true, // cross check. only used in KNN mode
           model_name_prefix, trt_precision_string2enum.at(trt_precision),
-          image_height, image_width, conf_thresh, dist_thresh);
+          image_height, image_width, conf_thresh, dist_thresh, num_threads);
     } else {
       ROS_ERROR("Detector(%s) or descriptor(%s) not implemented",
                 detector_type.c_str(), descriptor_type.c_str());

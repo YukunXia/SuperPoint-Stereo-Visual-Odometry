@@ -24,6 +24,7 @@
         <param name="trt_precision" type="string" value="FP32" />
         <param name="conf_thresh" type="double" value="0.015" />
         <param name="dist_thresh" type="int" value="4" />
+        <param name="num_threads" type="int" value="12" />
     </node>
   </group>
 </launch>

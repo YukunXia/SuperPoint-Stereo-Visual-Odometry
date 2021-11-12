@@ -6,6 +6,9 @@
 #include <NvInfer.h>
 #include <cuda_runtime_api.h>
 #include <opencv4/opencv2/opencv.hpp>
+#define EIGEN_USE_THREADS
+#include <unsupported/Eigen/CXX11/Tensor>
+#include <eigen3/unsupported/Eigen/CXX11/ThreadPool>
 
 #include <string>
 #include <unordered_map>
@@ -199,10 +202,11 @@ public:
         input_height_(120), input_width_(392), input_size_(120 * 392),
         output_det_size_(output_det_channel_ * 49 * 15),
         output_desc_size_(output_desc_channel_ * 49 * 15), output_width_(49),
-        output_height_(15), conf_thresh_(0.015), dist_thresh_(4) {
+        output_height_(15), conf_thresh_(0.015), dist_thresh_(4),
+        num_threads_(12) {
 
     initMatcher();
-    initIoPointers();
+    initPointers();
     loadTrtEngine();
   }
 
@@ -212,7 +216,8 @@ public:
                             const std::string model_name_prefix,
                             const TensorRtPrecision trt_precision,
                             const int input_height, const int input_width,
-                            const float conf_thresh, const int dist_thresh)
+                            const float conf_thresh, const int dist_thresh,
+                            const int num_threads)
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
                         matcher_type, selector_type, cross_check),
         model_name_prefix_(model_name_prefix), trt_precision_(TRT_FP32),
@@ -222,24 +227,31 @@ public:
         output_desc_size_(output_desc_channel_ * input_height * input_width /
                           64),
         output_width_(input_width / 8), output_height_(input_height / 8),
-        conf_thresh_(conf_thresh), dist_thresh_(dist_thresh) {
+        conf_thresh_(conf_thresh), dist_thresh_(dist_thresh),
+        num_threads_(num_threads) {
     assert(input_height % 8 == 0 && input_width % 8 == 0);
 
     initMatcher();
-    initIoPointers();
+    initPointers();
     loadTrtEngine();
   }
 
-  void initIoPointers() {
+  void initPointers() {
     input_data_ = std::unique_ptr<float[]>(new float[input_size_]);
     output_det_data_ = std::unique_ptr<float[]>(new float[output_det_size_]);
     output_desc_data_ = std::unique_ptr<float[]>(new float[output_desc_size_]);
+
+    tpl_ptr_ =
+        std::unique_ptr<Eigen::ThreadPool>(new Eigen::ThreadPool(num_threads_));
+    dev_ptr_ = std::unique_ptr<Eigen::ThreadPoolDevice>(
+        new Eigen::ThreadPoolDevice(tpl_ptr_.get(), num_threads_));
   }
   void loadTrtEngine();
 
   void preprocessImage(cv::Mat &img_l, cv::Mat &img_r);
   void runNeuralNetwork(const cv::Mat &img);
-  std::vector<cv::KeyPoint> DebugOneBatchOutput();
+  std::vector<cv::KeyPoint> postprocessDetection();
+  std::vector<cv::KeyPoint> debugOneBatchOutput();
   void addStereoImagePair(const cv::Mat &img_l, const cv::Mat &img_r,
                           const cv::Mat &projection_matrix_l,
                           const cv::Mat &projection_matrix_r);
@@ -288,4 +300,10 @@ private:
   std::unique_ptr<float[]> output_det_data_ = nullptr;
   std::unique_ptr<float[]> output_desc_data_ = nullptr;
   std::unique_ptr<char[]> trt_model_stream_ = nullptr;
+
+  // Performance engineering
+  const int num_threads_;
+  // Define a parallel device
+  std::unique_ptr<Eigen::ThreadPool> tpl_ptr_;
+  std::unique_ptr<Eigen::ThreadPoolDevice> dev_ptr_;
 };

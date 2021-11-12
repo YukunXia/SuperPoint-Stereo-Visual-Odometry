@@ -18,8 +18,11 @@ int main(int argc, char **argv) {
                       feature_front_end.getInputHeight()));
   image.convertTo(image, CV_32FC1, 1.0f / 255.0f);
 
-  feature_front_end.runNeuralNetwork(image);
-  std::vector<cv::KeyPoint> keypoints = feature_front_end.DebugOneBatchOutput();
+  // for (int i = 0; i < 100; ++i) {
+    feature_front_end.runNeuralNetwork(image);
+    std::vector<cv::KeyPoint> keypoints =
+        feature_front_end.postprocessDetection();
+  // }
 
   image.convertTo(image, cv::COLOR_GRAY2BGR, 255.0f);
   cv::drawKeypoints(image, keypoints, image);

@@ -1,9 +1,10 @@
 #include <odml_visual_odometry/feature_detection.hpp>
 
-#include <eigen3/Eigen/Sparse>
-#include <eigen3/unsupported/Eigen/CXX11/Tensor>
 #include <fstream>
 #include <ros/package.h>
+
+#define EIGEN_USE_THREADS
+#include <eigen3/Eigen/SparseCore>
 
 #ifndef CUDA_CHECK
 #define CUDA_CHECK(callstr)                                                    \
@@ -153,9 +154,6 @@ void SuperPointFeatureFrontEnd::preprocessImage(cv::Mat &img,
 }
 
 void SuperPointFeatureFrontEnd::runNeuralNetwork(const cv::Mat &img) {
-  // Input value type should be float. In the future, it's easy to enable double
-  // mode.
-  assert((img.type() & CV_MAT_DEPTH_MASK) == CV_32F);
   int i = 0;
   for (int row = 0; row < input_height_; ++row) {
     for (int col = 0; col < input_width_; ++col) {
@@ -180,333 +178,127 @@ void SuperPointFeatureFrontEnd::runNeuralNetwork(const cv::Mat &img) {
   cudaStreamSynchronize(stream_);
 
   const auto end = std::chrono::system_clock::now();
-  ROS_INFO("processing 1 image by neural network takes %ld ms",
-           std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
-               .count());
+  ROS_INFO(
+      "processing 1 image by neural network takes %.4f ms",
+      (float)std::chrono::duration_cast<std::chrono::microseconds>(end - start)
+              .count() /
+          1000.0f);
 }
 
-std::vector<cv::KeyPoint> SuperPointFeatureFrontEnd::DebugOneBatchOutput() {
-  // For NN output verification.
-  // [0,0,0,:] is the equivalent numpy slicing code for BxCxHxW format tensors
-  // https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#data-format-desc
-  // https://docs.nvidia.com/deeplearning/tensorrt/api/python_api/infer/Graph/LayerBase.html
-  // For now, B is eliminated temporarily
-  std::cout << "Raw: output_det[0,0,0,:] = ";
-  for (int w = 0; w < output_width_; ++w) {
-    std::cout << output_det_data_.get()[w] << ", ";
-  }
-  std::cout << std::endl;
-
-  std::cout << "\nRaw: output_desc[0,0,0,:] = ";
-  for (int w = 0; w < output_width_; ++w) {
-    std::cout << output_desc_data_.get()[w] << ", ";
-  }
-  std::cout << std::endl;
-
+std::vector<cv::KeyPoint> SuperPointFeatureFrontEnd::postprocessDetection() {
   Eigen::TensorMap<Eigen::Tensor<float, 3, Eigen::RowMajor>> output_det_tensor(
       output_det_data_.get(), output_det_channel_, output_height_,
       output_width_);
-  // Eigen::TensorMap<Eigen::Tensor<float, 3, Eigen::RowMajor>>
-  //     output_det_tensor_row_major(output_det_data_.get(),
-  //     output_det_channel_,
-  //                                 output_height_, output_width_);
-  // const std::array<int, 3> shuffle = {2, 1, 0};
-  // dim: output_det_channel_, output_height_, output_width_
-  // eg. 65, 120, 396
-  // Eigen::Tensor<float, 3, Eigen::RowMajor> output_det_tensor =
-  // output_det_tensor_row_major.swap_layout().shuffle(shuffle);
-  assert(output_det_tensor.dimension(0) == output_det_channel_);
-  assert(output_det_tensor.dimension(1) == output_height_);
-  assert(output_det_tensor.dimension(2) == output_width_);
-
-  std::cout << "\nEigen: output_det[0,0,0,:] = ";
-  for (int w = 0; w < output_width_; ++w) {
-    std::cout << output_det_tensor(0, 0, w) << ", ";
-  }
-  std::cout << std::endl;
-  // const Eigen::Tensor<float, 1> output_det_tensor_0c_0r =
-  // output_det_tensor.chip(0,0).chip(0,0); std::cout << output_det_tensor_0c_0r
-  // << std::endl;
-
-  std::cout << "\nEigen: output_det[0,0,1,:] = ";
-  for (int w = 0; w < output_width_; ++w) {
-    std::cout << output_det_tensor(0, 1, w) << ", ";
-  }
-  std::cout << std::endl;
-
-  std::cout << "\nEigen: output_det[0,:,0,0] = ";
-  for (int c = 0; c < output_det_channel_; ++c) {
-    std::cout << output_det_tensor(c, 0, 0) << ", ";
-  }
-  std::cout << std::endl;
-
-  output_det_tensor = output_det_tensor.exp().eval();
-
-  // std::cout << "\nEigen: np.exp(output_det[0,:,0,0]) = ";
-  // float sum_0_0 = 0.0f;
-  // for (int c = 0; c < output_det_channel_; ++c) {
-  //   std::cout << output_det_tensor(c, 0, 0) << ", ";
-  //   sum_0_0 += output_det_tensor(c, 0, 0);
-  // }
-  // std::cout << "\ntotal sum is " << sum_0_0 << std::endl;
-
-  const Eigen::Tensor<float, 3, Eigen::RowMajor> output_det_tensor_channel_sum =
+  output_det_tensor.device(*dev_ptr_) = output_det_tensor.exp().eval();
+  Eigen::Tensor<float, 3, Eigen::RowMajor> output_det_tensor_channel_sum(
+      1, output_height_, output_width_);
+  output_det_tensor_channel_sum.device(*dev_ptr_) =
       output_det_tensor.sum(Eigen::array<int, 1>({0}))
           .reshape(Eigen::array<int, 3>({1, output_height_, output_width_}));
-  assert(output_det_tensor_channel_sum.dimension(0) == 1);
-  assert(output_det_tensor_channel_sum.dimension(1) == output_height_);
-  assert(output_det_tensor_channel_sum.dimension(2) == output_width_);
-  std::cout << "\ntotal sum of row 0 col 0 is "
-            << output_det_tensor_channel_sum(0, 0, 0) << std::endl;
-  std::cout << "\ntotal sum of row -1 col -1 is "
-            << output_det_tensor_channel_sum(0, output_height_ - 1,
-                                             output_width_ - 1)
-            << std::endl;
-
-  output_det_tensor /=
+  output_det_tensor.device(*dev_ptr_) =
+      output_det_tensor /
       (output_det_tensor_channel_sum +
        output_det_tensor_channel_sum.constant(0.00001f))
           .broadcast(Eigen::array<int, 3>({output_det_channel_, 1, 1}));
-
-  std::cout << "\nEigen: after softmax, output_det[0,:,0,0] = ";
-  for (int c = 0; c < output_det_channel_; ++c) {
-    std::cout << output_det_tensor(c, 0, 0) << ", ";
-  }
-  std::cout << std::endl;
-
-  std::cout << "\nEigen: after softmax, output_det[0,:,-1,-1] = ";
-  for (int c = 0; c < output_det_channel_; ++c) {
-    std::cout << output_det_tensor(c, output_height_ - 1, output_width_ - 1)
-              << ", ";
-  }
-  std::cout << std::endl;
-
-  // aliasing effect won't be avoided even with eval, probably because dims are
-  // changed
-  Eigen::Tensor<float, 3, Eigen::RowMajor> output_det_tensor_nodust =
-      output_det_tensor.slice(
-          Eigen::array<int, 3>({0, 0, 0}),
-          Eigen::array<int, 3>(
-              {output_det_channel_ - 1, output_height_, output_width_}));
-  assert(output_det_tensor_nodust.dimension(0) == output_det_channel_ - 1);
-  assert(output_det_tensor_nodust.dimension(1) == output_height_);
-  assert(output_det_tensor_nodust.dimension(2) == output_width_);
-
-  std::cout << "\nEigen: after removing the last dim, output_det[0,:,0,0] = ";
-  for (int c = 0; c < output_det_channel_ - 1; ++c) {
-    std::cout << output_det_tensor_nodust(c, 0, 0) << ", ";
-  }
-  std::cout << std::endl;
-
-  std::cout << "\nEigen: after removing the last dim, output_det[0,:,-1,-1] = ";
-  for (int c = 0; c < output_det_channel_ - 1; ++c) {
-    std::cout << output_det_tensor_nodust(c, output_height_ - 1,
-                                          output_width_ - 1)
-              << ", ";
-  }
-  std::cout << std::endl;
-
-  const Eigen::Tensor<float, 3, Eigen::RowMajor>
-      output_det_tensor_nodust_transposed =
-          output_det_tensor_nodust.shuffle(Eigen::array<int, 3>({1, 2, 0}));
-
-  assert(output_det_tensor_nodust_transposed.dimension(0) == output_height_);
-  assert(output_det_tensor_nodust_transposed.dimension(1) == output_width_);
-  assert(output_det_tensor_nodust_transposed.dimension(2) ==
-         output_det_channel_ - 1);
-  assert(output_det_tensor_nodust_transposed(0, 0, 1) ==
-         output_det_tensor_nodust(1, 0, 0));
-  assert(output_det_tensor_nodust_transposed(output_height_ - 1,
-                                             output_width_ - 1, 1) ==
-         output_det_tensor_nodust(1, output_height_ - 1, output_width_ - 1));
-
-  std::cout << "\nEigen: after transposed, output_det[0,0,0,:] = ";
-  for (int c = 0; c < output_det_channel_ - 1; ++c) {
-    std::cout << output_det_tensor_nodust_transposed(0, 0, c) << ", ";
-  }
-  std::cout << std::endl;
-
-  std::cout << "\nEigen: after transposed, output_det[0,-1,-1,:] = ";
-  for (int c = 0; c < output_det_channel_ - 1; ++c) {
-    std::cout << output_det_tensor_nodust_transposed(output_height_ - 1,
-                                                     output_width_ - 1, c)
-              << ", ";
-  }
-  std::cout << std::endl;
-
-  const Eigen::Tensor<float, 4, Eigen::RowMajor>
-      output_det_tensor_nodust_transposed_reshaped =
-          output_det_tensor_nodust_transposed.reshape(Eigen::array<int, 4>(
-              {output_height_, output_width_, output_det_heatmap_factor_,
-               output_det_heatmap_factor_}));
-  assert(output_det_tensor_nodust_transposed_reshaped.dimension(0) ==
-         output_height_);
-  assert(output_det_tensor_nodust_transposed_reshaped.dimension(1) ==
-         output_width_);
-  assert(output_det_tensor_nodust_transposed_reshaped.dimension(2) ==
-         output_det_heatmap_factor_);
-  assert(output_det_tensor_nodust_transposed_reshaped.dimension(3) ==
-         output_det_heatmap_factor_);
-
-  std::cout << "\nEigen: after reshaped, output_det[0,0,0,:,:] = ";
-  for (int chn_r = 0; chn_r < output_det_heatmap_factor_; ++chn_r) {
-    for (int chn_c = 0; chn_c < output_det_heatmap_factor_; ++chn_c) {
-      std::cout << output_det_tensor_nodust_transposed_reshaped(0, 0, chn_r,
-                                                                chn_c)
-                << ", ";
-    }
-  }
-  std::cout << std::endl;
-
-  std::cout << "\nEigen: after reshaped, output_det[0,-1,-1,:,:] = ";
-  for (int chn_r = 0; chn_r < output_det_heatmap_factor_; ++chn_r) {
-    for (int chn_c = 0; chn_c < output_det_heatmap_factor_; ++chn_c) {
-      std::cout << output_det_tensor_nodust_transposed_reshaped(
-                       output_height_ - 1, output_width_ - 1, chn_r, chn_c)
-                << ", ";
-    }
-  }
-  std::cout << std::endl;
-
-  const Eigen::Tensor<float, 2, Eigen::RowMajor> heatmap =
+  Eigen::Tensor<float, 3, Eigen::RowMajor> output_det_tensor_nodust(
+      output_det_channel_ - 1, output_height_, output_width_);
+  output_det_tensor_nodust.device(*dev_ptr_) = output_det_tensor.slice(
+      Eigen::array<int, 3>({0, 0, 0}),
+      Eigen::array<int, 3>(
+          {output_det_channel_ - 1, output_height_, output_width_}));
+  Eigen::Tensor<float, 3, Eigen::RowMajor> output_det_tensor_nodust_transposed(
+      output_height_, output_width_, output_det_channel_ - 1);
+  output_det_tensor_nodust_transposed.device(*dev_ptr_) =
+      output_det_tensor_nodust.shuffle(Eigen::array<int, 3>({1, 2, 0}));
+  Eigen::Tensor<float, 4, Eigen::RowMajor>
+      output_det_tensor_nodust_transposed_reshaped(
+          output_height_, output_width_, output_det_heatmap_factor_,
+          output_det_heatmap_factor_);
+  output_det_tensor_nodust_transposed_reshaped.device(*dev_ptr_) =
+      output_det_tensor_nodust_transposed.reshape(Eigen::array<int, 4>(
+          {output_height_, output_width_, output_det_heatmap_factor_,
+           output_det_heatmap_factor_}));
+  Eigen::Tensor<float, 2, Eigen::RowMajor> heatmap(
+      output_height_ * output_det_heatmap_factor_,
+      output_width_ * output_det_heatmap_factor_);
+  heatmap.device(*dev_ptr_) =
       output_det_tensor_nodust_transposed_reshaped
           .shuffle(Eigen::array<int, 4>({0, 2, 1, 3}))
           .reshape(Eigen::array<int, 2>(
               {output_height_ * output_det_heatmap_factor_,
                output_width_ * output_det_heatmap_factor_}));
 
-  assert(heatmap.dimension(0) == output_height_ * output_det_heatmap_factor_);
-  assert(heatmap.dimension(1) == output_width_ * output_det_heatmap_factor_);
-  std::cout << "\nEigen: heatmap [:5,:5] = \n";
-  std::cout << heatmap.slice(Eigen::array<int, 2>({0, 0}),
-                             Eigen::array<int, 2>({5, 5}))
-            << std::endl;
-  std::cout << "\nEigen: heatmap [-5:,-5:] = \n";
-  std::cout << heatmap.slice(
-                   Eigen::array<int, 2>(
-                       {output_height_ * output_det_heatmap_factor_ - 5,
-                        output_width_ * output_det_heatmap_factor_ - 5}),
-                   Eigen::array<int, 2>({5, 5}))
-            << std::endl;
-  std::cout << "output_height_ * output_det_heatmap_factor_ - 5 = "
-            << output_height_ * output_det_heatmap_factor_ - 5
-            << ", output_width_ * output_det_heatmap_factor_ - 5 = "
-            << output_width_ * output_det_heatmap_factor_ - 5 << std::endl;
-
-  const Eigen::Tensor<float, 2, Eigen::RowMajor> heatmap_padded =
-      heatmap.pad(Eigen::array<std::pair<int, int>, 2>(
-          {std::pair<int, int>{dist_thresh_, dist_thresh_},
-           std::pair<int, int>{dist_thresh_, dist_thresh_}}));
-  assert(heatmap_padded.dimension(0) ==
-         dist_thresh_ * 2 + output_height_ * output_det_heatmap_factor_);
-  assert(heatmap_padded.dimension(1) ==
-         dist_thresh_ * 2 + output_width_ * output_det_heatmap_factor_);
-  std::cout << "\nEigen: heatmap_padded [:5,:5] = \n";
-  std::cout << heatmap_padded.slice(Eigen::array<int, 2>({0, 0}),
-                                    Eigen::array<int, 2>({5, 5}))
-            << std::endl;
-  std::cout << "\nEigen: heatmap_padded [-5:,-5:] = \n";
-  std::cout << heatmap_padded.slice(
-                   Eigen::array<int, 2>(
-                       {dist_thresh_ * 2 +
-                            output_height_ * output_det_heatmap_factor_ - 5,
-                        dist_thresh_ * 2 +
-                            output_width_ * output_det_heatmap_factor_ - 5}),
-                   Eigen::array<int, 2>({5, 5}))
-            << std::endl;
-
-  // const Eigen::Tensor<float, 3, Eigen::RowMajor> heatmap_maxpooled =
-  //     heatmap_padded
-  //         .extract_patches(Eigen::array<int, 2>(
-  //             {dist_thresh_ * 2 + 1, dist_thresh_ * 2 + 1}))
-  //         .reshape(Eigen::array<int, 3>(
-  //             {output_height_ * output_det_heatmap_factor_,
-  //              output_width_ * output_det_heatmap_factor_,
-  //              (dist_thresh_ * 2 + 1) * (dist_thresh_ * 2 + 1)}));
-  // std::cout << "heatmap_maxpooled.dimension(0) = "
-  //           << heatmap_maxpooled.dimension(0) << std::endl;
-  // std::cout << "heatmap_maxpooled.dimension(1) = "
-  //           << heatmap_maxpooled.dimension(1) << std::endl;
-  // std::cout << "heatmap_maxpooled.dimension(2) = "
-  //           << heatmap_maxpooled.dimension(2) << std::endl;
-
-  const Eigen::Tensor<float, 2, Eigen::RowMajor> heatmap_maxpooled =
-      heatmap_padded
-          .extract_patches(Eigen::array<int, 2>(
-              {dist_thresh_ * 2 + 1, dist_thresh_ * 2 + 1}))
-          .reshape(Eigen::array<int, 3>(
-              {output_height_ * output_det_heatmap_factor_,
-               output_width_ * output_det_heatmap_factor_,
-               (dist_thresh_ * 2 + 1) * (dist_thresh_ * 2 + 1)}))
-          .maximum(Eigen::array<int, 1>({2}));
-  assert(heatmap_maxpooled.dimension(0) ==
-         output_height_ * output_det_heatmap_factor_);
-  assert(heatmap_maxpooled.dimension(1) ==
-         output_width_ * output_det_heatmap_factor_);
-  std::cout << "\nEigen: heatmap_maxpooled [:5,:5] = \n";
-  std::cout << heatmap_maxpooled.slice(Eigen::array<int, 2>({0, 0}),
-                                       Eigen::array<int, 2>({5, 5}))
-            << std::endl;
-  std::cout << "\nEigen: heatmap_maxpooled [-5:,-5:] = \n";
-  std::cout << heatmap_maxpooled.slice(
-                   Eigen::array<int, 2>(
-                       {output_height_ * output_det_heatmap_factor_ - 5,
-                        output_width_ * output_det_heatmap_factor_ - 5}),
-                   Eigen::array<int, 2>({5, 5}))
-            << std::endl;
-
-  Eigen::Tensor<bool, 2, Eigen::RowMajor> heatmap_cmp =
-      (heatmap == heatmap_maxpooled);
-  std::cout << "\nEigen: heatmap_cmp [:10,:10] = \n";
-  std::cout << heatmap_cmp.slice(Eigen::array<int, 2>({0, 0}),
-                                 Eigen::array<int, 2>({10, 10}))
-            << std::endl;
-  std::cout << "\nEigen: heatmap_cmp [-10:,-10:] = \n";
-  std::cout << heatmap_cmp.slice(
-                   Eigen::array<int, 2>(
-                       {output_height_ * output_det_heatmap_factor_ - 10,
-                        output_width_ * output_det_heatmap_factor_ - 10}),
-                   Eigen::array<int, 2>({10, 10}))
-            << std::endl;
-
-  // const Eigen::SparseMatrix<float> sparse = heatmap_cmp.
   Eigen::Map<
-      Eigen::Matrix<bool, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
-      heatmap_cmp_matrix(heatmap_cmp.data(),
-                         output_height_ * output_det_heatmap_factor_,
-                         output_width_ * output_det_heatmap_factor_);
-  std::cout << "\nEigen: heatmap_cmp_matrix [:10,:10] = \n";
-  std::cout << heatmap_cmp_matrix.topLeftCorner(10, 10) << std::endl;
-  std::cout << "\nEigen: heatmap_cmp_matrix [-10:,-10:] = \n";
-  std::cout << heatmap_cmp_matrix.bottomRightCorner(10, 10) << std::endl;
+      Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+      heatmap_matrix(heatmap.data(),
+                     output_height_ * output_det_heatmap_factor_,
+                     output_width_ * output_det_heatmap_factor_);
+  const Eigen::Matrix<bool, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+      heatmap_cmp = (heatmap_matrix.array() > conf_thresh_);
 
-  Eigen::SparseMatrix<bool> heatmap_cmp_sparse =
-      heatmap_cmp_matrix.sparseView();
-  std::cout << "innerSize = " << heatmap_cmp_sparse.innerSize()
-            << ", outerSize = " << heatmap_cmp_sparse.outerSize() << std::endl;
-
-  int i = 0;
-  std::vector<cv::KeyPoint> keypoints;
+  const Eigen::SparseMatrix<bool> heatmap_cmp_sparse = heatmap_cmp.sparseView();
+  std::vector<cv::KeyPoint> keypoints_before_nms;
   for (int k = 0; k < heatmap_cmp_sparse.outerSize(); ++k)
     for (Eigen::SparseMatrix<bool>::InnerIterator it(heatmap_cmp_sparse, k); it;
          ++it) {
-      const float val = heatmap(it.row(), it.col());
-      if (val > conf_thresh_) {
-        // std::cout << "row = " << it.row() << ", col = " << it.col()
-        //           << ", value = " << val << std::endl;
-        keypoints.emplace_back(cv::Point2f((float)it.col(), (float)it.row()),
-                               1);
-        ++i;
+      keypoints_before_nms.emplace_back(
+          cv::Point2f((float)it.col(), (float)it.row()),
+          heatmap(it.row(), it.col()));
+    }
+  std::sort(keypoints_before_nms.begin(), keypoints_before_nms.end(),
+            [](const cv::KeyPoint &p1, const cv::KeyPoint &p2) {
+              return p1.size > p2.size;
+            });
+
+  Eigen::Matrix<bool, Eigen::Dynamic, Eigen::Dynamic> nms_matrix =
+      Eigen::Matrix<bool, Eigen::Dynamic, Eigen::Dynamic>::Zero(
+          heatmap_matrix.rows(), heatmap_matrix.cols());
+
+  std::vector<cv::KeyPoint> keypoints_after_nms;
+  keypoints_after_nms.reserve(keypoints_before_nms.size());
+  for (const auto &keypoint : keypoints_before_nms) {
+    const int row = keypoint.pt.y;
+    const int col = keypoint.pt.x;
+    if (nms_matrix(row, col) == false) {
+      keypoints_after_nms.emplace_back(keypoint.pt, 1);
+      for (int r = row - dist_thresh_; r < row + dist_thresh_ + 1; ++r) {
+        if (r < 0 || r >= heatmap_matrix.rows())
+          continue;
+        for (int c = col - dist_thresh_; c < col + dist_thresh_ + 1; ++c) {
+          if (c < 0 || c >= heatmap_matrix.cols())
+            continue;
+          nms_matrix(r, c) = true;
+        }
       }
     }
-  std::cout << i << " points detected" << std::endl;
+  }
 
-  return keypoints;
+  return keypoints_after_nms;
+}
+
+std::vector<cv::KeyPoint> SuperPointFeatureFrontEnd::debugOneBatchOutput() {
+
+  const auto start = std::chrono::system_clock::now();
+
+  std::vector<cv::KeyPoint> keypoints_after_nms = postprocessDetection();
+
+  const auto end = std::chrono::system_clock::now();
+  ROS_INFO(
+      "postprocessing detection of 1 image takes %.4f ms",
+      (float)std::chrono::duration_cast<std::chrono::microseconds>(end - start)
+              .count() /
+          1000.0f);
+
+  ROS_INFO("%lu keypoints_after_nms", keypoints_after_nms.size());
+
+  return keypoints_after_nms;
 }
 
 void SuperPointFeatureFrontEnd::addStereoImagePair(
     const cv::Mat &img_l, const cv::Mat &img_r,
     const cv::Mat &projection_matrix_l, const cv::Mat &projection_matrix_r) {
+  // Input value type should be float. In the future, it's easy to enable double
+  // mode.
   // Reference for type assertion
   // img_l.type() & CV_MAT_DEPTH_MASK is the type code
   // 1 + (img_r.type() >> CV_CN_SHIFT) is the channel number
