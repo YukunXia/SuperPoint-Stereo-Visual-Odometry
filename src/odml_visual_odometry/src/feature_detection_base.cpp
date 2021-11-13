@@ -184,3 +184,43 @@ cv::Mat FeatureFrontEnd::visualizeMatches(const MatchType match_type) {
 
   return matching_img;
 }
+
+void FeatureFrontEnd::matchDescriptors(const MatchType match_type) {
+  cv::Mat &descriptors0 =
+      descriptors_dq.end()[match_type_to_positions[match_type].first];
+  cv::Mat &descriptors1 =
+      descriptors_dq.end()[match_type_to_positions[match_type].second];
+  std::vector<cv::KeyPoint> &keypoints0 =
+      keypoints_dq.end()[match_type_to_positions[match_type].first];
+  std::vector<cv::KeyPoint> &keypoints1 =
+      keypoints_dq.end()[match_type_to_positions[match_type].second];
+
+  if (matcher_type_ == MatcherType::FLANN) {
+    if (descriptors0.type() != CV_32F) {
+      descriptors0.convertTo(descriptors0, CV_32F);
+    }
+    if (descriptors1.type() != CV_32F) {
+      descriptors1.convertTo(descriptors1, CV_32F);
+    }
+  }
+
+  std::vector<cv::DMatch> &cv_Dmatches = cv_DMatches_list[match_type];
+  cv_Dmatches.clear();
+  if (selector_type_ == SelectorType::NN) {
+    matcher_->match(descriptors0, descriptors1, cv_Dmatches);
+  } else if (selector_type_ == SelectorType::KNN) {
+    // k nearest neighbors (k=2)
+    std::vector<std::vector<cv::DMatch>> knn_matches;
+    matcher_->knnMatch(descriptors0, descriptors1, knn_matches, 2);
+    for (const auto &knn_match : knn_matches) {
+      if (knn_match[0].distance < knn_threshold_ * knn_match[1].distance) {
+        cv_Dmatches.push_back(knn_match[0]);
+      }
+    }
+  }
+
+  if (match_type == MatchType::CURR_LEFT_CURR_RIGHT)
+    ROS_INFO("%lu matches for CURR_LEFT_CURR_RIGHT", cv_Dmatches.size());
+  else if (match_type == MatchType::PREV_LEFT_CURR_LEFT)
+    ROS_INFO("%lu matches for PREV_LEFT_CURR_LEFT", cv_Dmatches.size());
+}

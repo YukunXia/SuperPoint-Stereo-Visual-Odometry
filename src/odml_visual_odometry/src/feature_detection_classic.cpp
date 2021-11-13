@@ -88,6 +88,8 @@ void ClassicFeatureFrontEnd::addStereoImagePair(
     return;
   }
 
+  const auto start = std::chrono::system_clock::now();
+
   projection_matrix_l_ = projection_matrix_l.clone();
   projection_matrix_r_ = projection_matrix_r.clone();
 
@@ -96,6 +98,8 @@ void ClassicFeatureFrontEnd::addStereoImagePair(
 
   keypoints_dq.push_back(detectKeypoints(img_l));
   keypoints_dq.push_back(detectKeypoints(img_r));
+  ROS_INFO("%lu, %lu keypoints for img_l and img_r",
+           keypoints_dq.end()[-2].size(), keypoints_dq.end()[-1].size());
 
   descriptors_dq.push_back(describeKeypoints(keypoints_dq.rbegin()[1], img_l));
   descriptors_dq.push_back(describeKeypoints(keypoints_dq.rbegin()[0], img_r));
@@ -106,44 +110,13 @@ void ClassicFeatureFrontEnd::addStereoImagePair(
     descriptors_dq.pop_front();
   }
 
-  for (auto &cv_DMatches : cv_DMatches_list) {
-    cv_DMatches.clear();
-  }
-
   assert(keypoints_dq.size() <= 4);
   assert(descriptors_dq.size() <= 4);
-}
 
-void ClassicFeatureFrontEnd::matchDescriptors(const MatchType match_type) {
-  cv::Mat &descriptors0 =
-      descriptors_dq.end()[match_type_to_positions[match_type].first];
-  cv::Mat &descriptors1 =
-      descriptors_dq.end()[match_type_to_positions[match_type].second];
-  std::vector<cv::KeyPoint> &keypoints0 =
-      keypoints_dq.end()[match_type_to_positions[match_type].first];
-  std::vector<cv::KeyPoint> &keypoints1 =
-      keypoints_dq.end()[match_type_to_positions[match_type].second];
-
-  if (matcher_type_ == MatcherType::FLANN) {
-    if (descriptors0.type() != CV_32F) {
-      descriptors0.convertTo(descriptors0, CV_32F);
-    }
-    if (descriptors1.type() != CV_32F) {
-      descriptors1.convertTo(descriptors1, CV_32F);
-    }
-  }
-
-  std::vector<cv::DMatch> &cv_Dmatches = cv_DMatches_list[match_type];
-  if (selector_type_ == SelectorType::NN) {
-    matcher_->match(descriptors0, descriptors1, cv_Dmatches);
-  } else if (selector_type_ == SelectorType::KNN) {
-    // k nearest neighbors (k=2)
-    std::vector<std::vector<cv::DMatch>> knn_matches;
-    matcher_->knnMatch(descriptors0, descriptors1, knn_matches, 2);
-    for (const auto &knn_match : knn_matches) {
-      if (knn_match[0].distance < knn_threshold_ * knn_match[1].distance) {
-        cv_Dmatches.push_back(knn_match[0]);
-      }
-    }
-  }
+  const auto end = std::chrono::system_clock::now();
+  ROS_INFO(
+      "(pre, mid, post)processing detection of 1 image takes %.4f ms",
+      (float)std::chrono::duration_cast<std::chrono::microseconds>(end - start)
+              .count() /
+          1000.0f);
 }

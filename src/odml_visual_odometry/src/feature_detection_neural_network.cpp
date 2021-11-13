@@ -142,6 +142,8 @@ void SuperPointFeatureFrontEnd::preprocessImage(cv::Mat &img,
   // Step 2: Resize the image
   cv::resize(img, img, cv::Size(input_width_, input_height_), 0.0, 0.0,
              cv::INTER_LINEAR);
+  // store image before transforming from 8U to 32F
+  images_dq.push_back(img);
   // superpoint takes in normalized data ranging from 0.0 to 1.0
   // From demo_superpoint.py:
   // > input_image = cv2.cvtColor(input_image, cv2.COLOR_RGB2GRAY)
@@ -185,11 +187,26 @@ void SuperPointFeatureFrontEnd::runNeuralNetwork(const cv::Mat &img) {
           1000.0f);
 }
 
-std::vector<cv::KeyPoint> SuperPointFeatureFrontEnd::postprocessDetection() {
+void SuperPointFeatureFrontEnd::postprocessDetectionAndDescription(
+    std::vector<cv::KeyPoint> &keypoints_after_nms, cv::Mat &descriptors) {
+  // transforming raw pointer data into Eigen tensors
   Eigen::TensorMap<Eigen::Tensor<float, 3, Eigen::RowMajor>> output_det_tensor(
       output_det_data_.get(), output_det_channel_, output_height_,
       output_width_);
+  Eigen::TensorMap<Eigen::Tensor<float, 3, Eigen::RowMajor>> output_desc_tensor(
+      output_desc_data_.get(), output_desc_channel_, output_height_,
+      output_width_);
+  // move the channel to the last dim, so that the channelwise data will be
+  // continuous
+  Eigen::Tensor<float, 3, Eigen::RowMajor> output_desc_tensor_transposed(
+      output_height_, output_width_, output_desc_channel_);
+  output_desc_tensor_transposed.device(*dev_ptr_) =
+      output_desc_tensor.shuffle(Eigen::array<int, 3>({1, 2, 0}));
+
+  // dense = np.exp(semi) # Softmax.
   output_det_tensor.device(*dev_ptr_) = output_det_tensor.exp().eval();
+
+  // dense = dense / (np.sum(dense, axis=0)+.00001) # Should sum to 1.
   Eigen::Tensor<float, 3, Eigen::RowMajor> output_det_tensor_channel_sum(
       1, output_height_, output_width_);
   output_det_tensor_channel_sum.device(*dev_ptr_) =
@@ -200,16 +217,26 @@ std::vector<cv::KeyPoint> SuperPointFeatureFrontEnd::postprocessDetection() {
       (output_det_tensor_channel_sum +
        output_det_tensor_channel_sum.constant(0.00001f))
           .broadcast(Eigen::array<int, 3>({output_det_channel_, 1, 1}));
+
+  // # Remove dustbin.
+  // nodust = dense[:-1, :, :]
   Eigen::Tensor<float, 3, Eigen::RowMajor> output_det_tensor_nodust(
       output_det_channel_ - 1, output_height_, output_width_);
   output_det_tensor_nodust.device(*dev_ptr_) = output_det_tensor.slice(
       Eigen::array<int, 3>({0, 0, 0}),
       Eigen::array<int, 3>(
           {output_det_channel_ - 1, output_height_, output_width_}));
+
+  // nodust = nodust.transpose(1, 2, 0)
   Eigen::Tensor<float, 3, Eigen::RowMajor> output_det_tensor_nodust_transposed(
       output_height_, output_width_, output_det_channel_ - 1);
   output_det_tensor_nodust_transposed.device(*dev_ptr_) =
       output_det_tensor_nodust.shuffle(Eigen::array<int, 3>({1, 2, 0}));
+
+  // # Reshape to get full resolution heatmap.
+  // Hc = int(H / self.cell)
+  // Wc = int(W / self.cell)
+  // heatmap = np.reshape(nodust, [Hc, Wc, self.cell, self.cell])
   Eigen::Tensor<float, 4, Eigen::RowMajor>
       output_det_tensor_nodust_transposed_reshaped(
           output_height_, output_width_, output_det_heatmap_factor_,
@@ -218,6 +245,9 @@ std::vector<cv::KeyPoint> SuperPointFeatureFrontEnd::postprocessDetection() {
       output_det_tensor_nodust_transposed.reshape(Eigen::array<int, 4>(
           {output_height_, output_width_, output_det_heatmap_factor_,
            output_det_heatmap_factor_}));
+
+  // heatmap = np.transpose(heatmap, [0, 2, 1, 3])
+  // heatmap = np.reshape(heatmap, [Hc*self.cell, Wc*self.cell])
   Eigen::Tensor<float, 2, Eigen::RowMajor> heatmap(
       output_height_ * output_det_heatmap_factor_,
       output_width_ * output_det_heatmap_factor_);
@@ -228,6 +258,7 @@ std::vector<cv::KeyPoint> SuperPointFeatureFrontEnd::postprocessDetection() {
               {output_height_ * output_det_heatmap_factor_,
                output_width_ * output_det_heatmap_factor_}));
 
+  // xs, ys = np.where(heatmap >= self.conf_thresh) # Confidence threshold.
   Eigen::Map<
       Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
       heatmap_matrix(heatmap.data(),
@@ -250,17 +281,32 @@ std::vector<cv::KeyPoint> SuperPointFeatureFrontEnd::postprocessDetection() {
               return p1.size > p2.size;
             });
 
+  // pts, _ = self.nms_fast(pts, H, W, dist_thresh=self.nms_dist) # Apply NMS.
   Eigen::Matrix<bool, Eigen::Dynamic, Eigen::Dynamic> nms_matrix =
       Eigen::Matrix<bool, Eigen::Dynamic, Eigen::Dynamic>::Zero(
           heatmap_matrix.rows(), heatmap_matrix.cols());
 
-  std::vector<cv::KeyPoint> keypoints_after_nms;
+  // initialize output variables
+  keypoints_after_nms.clear();
   keypoints_after_nms.reserve(keypoints_before_nms.size());
+
   for (const auto &keypoint : keypoints_before_nms) {
     const int row = keypoint.pt.y;
     const int col = keypoint.pt.x;
     if (nms_matrix(row, col) == false) {
-      keypoints_after_nms.emplace_back(keypoint.pt, 1);
+      // remove points close to borders
+      // bord = self.border_remove
+      // toremoveW = np.logical_or(pts[0, :] < bord, pts[0, :] >= (W-bord))
+      // toremoveH = np.logical_or(pts[1, :] < bord, pts[1, :] >= (H-bord))
+      // toremove = np.logical_or(toremoveW, toremoveH)
+      // pts = pts[:, ~toremove]
+      if (row >= border_remove_ &&
+          row + border_remove_ < heatmap_matrix.rows() &&
+          col >= border_remove_ &&
+          col + border_remove_ < heatmap_matrix.cols()) {
+        keypoints_after_nms.emplace_back(keypoint.pt, 1);
+      }
+      // suppress nearby points
       for (int r = row - dist_thresh_; r < row + dist_thresh_ + 1; ++r) {
         if (r < 0 || r >= heatmap_matrix.rows())
           continue;
@@ -273,14 +319,79 @@ std::vector<cv::KeyPoint> SuperPointFeatureFrontEnd::postprocessDetection() {
     }
   }
 
-  return keypoints_after_nms;
+  descriptors =
+      cv::Mat(keypoints_after_nms.size(), output_desc_channel_, CV_32FC1);
+  for (int i = 0; i < keypoints_after_nms.size(); ++i) {
+    const cv::KeyPoint &keypoint = keypoints_after_nms[i];
+    const int row = keypoint.pt.y;
+    const int col = keypoint.pt.x;
+    Eigen::VectorXf desc_interpolated =
+        bilinearInterpolationDesc(output_desc_tensor_transposed, row, col);
+    const cv::Mat desc_interpolated_cv_mat(1, output_desc_channel_, CV_32F,
+                                           desc_interpolated.data());
+    desc_interpolated_cv_mat.copyTo(descriptors.row(i));
+  }
 }
 
-std::vector<cv::KeyPoint> SuperPointFeatureFrontEnd::debugOneBatchOutput() {
+Eigen::VectorXf SuperPointFeatureFrontEnd::bilinearInterpolationDesc(
+    const Eigen::Tensor<float, 3, Eigen::RowMajor>
+        &output_desc_tensor_transposed,
+    const int row, const int col) {
+  // transforming row and col from heatmap coords into desc (downsampled/coarse)
+  // coords
+  const float row_by8 =
+      static_cast<float>(row) / static_cast<float>(output_det_heatmap_factor_);
+  const float col_by8 =
+      static_cast<float>(col) / static_cast<float>(output_det_heatmap_factor_);
+
+  const int row_top_l = std::floor(row_by8);
+  const int col_top_l = std::floor(col_by8);
+
+  const float row_ratio = 1.0f - (row_by8 - static_cast<float>(row_top_l));
+  const float col_ratio = 1.0f - (col_by8 - static_cast<float>(col_top_l));
+
+  assert(row_ratio >= 0.0f && row_ratio < 1.0f);
+  assert(col_ratio >= 0.0f && col_ratio < 1.0f);
+
+  const int offset_top_l =
+      output_desc_channel_ * (row_top_l * output_width_ + col_top_l);
+  const int offset_top_r =
+      output_desc_channel_ * (row_top_l * output_width_ + col_top_l + 1);
+  const int offset_bot_l =
+      output_desc_channel_ * ((row_top_l + 1) * output_width_ + col_top_l);
+  const int offset_bot_r =
+      output_desc_channel_ * ((row_top_l + 1) * output_width_ + col_top_l + 1);
+
+  Eigen::Map<Eigen::VectorXf> desc_top_l(
+      const_cast<float *>(output_desc_tensor_transposed.data()) + offset_top_l,
+      output_desc_channel_);
+  Eigen::Map<Eigen::VectorXf> desc_top_r(
+      const_cast<float *>(output_desc_tensor_transposed.data()) + offset_top_r,
+      output_desc_channel_);
+  Eigen::Map<Eigen::VectorXf> desc_bot_l(
+      const_cast<float *>(output_desc_tensor_transposed.data()) + offset_bot_l,
+      output_desc_channel_);
+  Eigen::Map<Eigen::VectorXf> desc_bot_r(
+      const_cast<float *>(output_desc_tensor_transposed.data()) + offset_bot_r,
+      output_desc_channel_);
+
+  Eigen::VectorXf desc_interpolated =
+      desc_top_l * row_ratio * col_ratio +
+      desc_top_r * row_ratio * (1.0f - col_ratio) +
+      desc_bot_l * (1.0f - row_ratio) * col_ratio +
+      desc_bot_r * (1.0f - row_ratio) * (1.0f - col_ratio);
+  desc_interpolated.normalize();
+
+  return desc_interpolated;
+}
+
+void SuperPointFeatureFrontEnd::debugOneBatchOutput() {
 
   const auto start = std::chrono::system_clock::now();
 
-  std::vector<cv::KeyPoint> keypoints_after_nms = postprocessDetection();
+  std::vector<cv::KeyPoint> keypoints_after_nms;
+  cv::Mat descriptors;
+  postprocessDetectionAndDescription(keypoints_after_nms, descriptors);
 
   const auto end = std::chrono::system_clock::now();
   ROS_INFO(
@@ -291,7 +402,8 @@ std::vector<cv::KeyPoint> SuperPointFeatureFrontEnd::debugOneBatchOutput() {
 
   ROS_INFO("%lu keypoints_after_nms", keypoints_after_nms.size());
 
-  return keypoints_after_nms;
+  keypoints_dq.push_back(keypoints_after_nms);
+  descriptors_dq.push_back(descriptors);
 }
 
 void SuperPointFeatureFrontEnd::addStereoImagePair(
@@ -308,6 +420,9 @@ void SuperPointFeatureFrontEnd::addStereoImagePair(
   assert((img_r.type() & CV_MAT_DEPTH_MASK) == CV_32F &&
          (1 + (img_r.type() >> CV_CN_SHIFT)) == 1);
 
+
+  const auto start = std::chrono::system_clock::now();
+
   cv::Mat img_l_fit = img_l.clone();
   cv::Mat img_r_fit = img_r.clone();
 
@@ -320,6 +435,37 @@ void SuperPointFeatureFrontEnd::addStereoImagePair(
   assert(img_r_fit.rows == input_height_ && img_r_fit.cols == input_width_);
 
   assert(input_data_ != nullptr);
-}
 
-void SuperPointFeatureFrontEnd::matchDescriptors(const MatchType match_type) {}
+  runNeuralNetwork(img_l_fit);
+  std::vector<cv::KeyPoint> keypoints_after_nms_l;
+  cv::Mat descriptors_l;
+  postprocessDetectionAndDescription(keypoints_after_nms_l, descriptors_l);
+  keypoints_dq.push_back(keypoints_after_nms_l);
+  descriptors_dq.push_back(descriptors_l);
+
+  runNeuralNetwork(img_r_fit);
+  std::vector<cv::KeyPoint> keypoints_after_nms_r;
+  cv::Mat descriptors_r;
+  postprocessDetectionAndDescription(keypoints_after_nms_r, descriptors_r);
+  keypoints_dq.push_back(keypoints_after_nms_r);
+  descriptors_dq.push_back(descriptors_r);
+
+  ROS_INFO("%lu, %lu keypoints for img_l and img_r",
+           keypoints_dq.end()[-2].size(), keypoints_dq.end()[-1].size());
+
+  while (images_dq.size() > 4) {
+    images_dq.pop_front();
+    keypoints_dq.pop_front();
+    descriptors_dq.pop_front();
+  }
+
+  assert(keypoints_dq.size() <= 4);
+  assert(descriptors_dq.size() <= 4);
+
+  const auto end = std::chrono::system_clock::now();
+  ROS_INFO(
+      "(pre, mid, post)processing detection of 1 image takes %.4f ms",
+      (float)std::chrono::duration_cast<std::chrono::microseconds>(end - start)
+              .count() /
+          1000.0f);
+}

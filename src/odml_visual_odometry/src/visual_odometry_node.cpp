@@ -151,6 +151,8 @@ void stereoCallback(
     return;
   }
 
+  const auto start = std::chrono::system_clock::now();
+
   for (int i = 0; i < MATCH_TYPE_NUM; ++i) {
     const MatchType match_type = static_cast<MatchType>(i);
     feature_front_end_ptr->matchDescriptors(match_type);
@@ -167,7 +169,21 @@ void stereoCallback(
     pub_matches_img_list[match_type].publish(matches_viz_cvbridge.toImageMsg());
   }
 
+  const auto mid = std::chrono::system_clock::now();
+  ROS_INFO(
+      "matching of 1 image takes %.4f ms",
+      (float)std::chrono::duration_cast<std::chrono::microseconds>(mid - start)
+              .count() /
+          1000.0f);
+
   feature_front_end_ptr->solveStereoOdometry(cam0_curr_T_cam0_prev);
+
+  const auto end = std::chrono::system_clock::now();
+  ROS_INFO(
+      "solveStereoOdometry of 1 image takes %.4f ms",
+      (float)std::chrono::duration_cast<std::chrono::microseconds>(end - mid)
+              .count() /
+          1000.0f);
 
   publishOdometry(cam0_curr_T_cam0_prev);
 }
@@ -236,6 +252,7 @@ int main(int argc, char **argv) {
       double conf_thresh;
       int dist_thresh;
       int num_threads;
+      int border_remove;
       nh_private.getParam("matcher_type", matcher_type);
       nh_private.getParam("selector_type", selector_type);
       nh_private.getParam("model_name_prefix", model_name_prefix);
@@ -245,6 +262,7 @@ int main(int argc, char **argv) {
       nh_private.getParam("conf_thresh", conf_thresh);
       nh_private.getParam("dist_thresh", dist_thresh);
       nh_private.getParam("num_threads", num_threads);
+      nh_private.getParam("border_remove", border_remove);
       if (image_height % 8 != 0 || image_width % 8 != 0) {
         ROS_ERROR("image_height(%d) or image_width(%d) is indivisble by 8",
                   image_height, image_width);
@@ -255,7 +273,8 @@ int main(int argc, char **argv) {
           selector_name_to_type.at(selector_type),
           true, // cross check. only used in KNN mode
           model_name_prefix, trt_precision_string2enum.at(trt_precision),
-          image_height, image_width, conf_thresh, dist_thresh, num_threads);
+          image_height, image_width, conf_thresh, dist_thresh, num_threads,
+          border_remove);
     } else {
       ROS_ERROR("Detector(%s) or descriptor(%s) not implemented",
                 detector_type.c_str(), descriptor_type.c_str());

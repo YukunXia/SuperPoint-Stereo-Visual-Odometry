@@ -7,8 +7,8 @@
 #include <cuda_runtime_api.h>
 #include <opencv4/opencv2/opencv.hpp>
 #define EIGEN_USE_THREADS
-#include <unsupported/Eigen/CXX11/Tensor>
 #include <eigen3/unsupported/Eigen/CXX11/ThreadPool>
+#include <unsupported/Eigen/CXX11/Tensor>
 
 #include <string>
 #include <unordered_map>
@@ -97,7 +97,7 @@ public:
   virtual void addStereoImagePair(const cv::Mat &img_l, const cv::Mat &img_r,
                                   const cv::Mat &projection_matrix_l,
                                   const cv::Mat &projection_matrix_r) = 0;
-  virtual void matchDescriptors(const MatchType match_type) = 0;
+  void matchDescriptors(const MatchType match_type);
   void solveStereoOdometry(tf2::Transform &cam0_curr_T_cam0_prev,
                            const float stereo_threshold = 4.0f);
   cv::Mat visualizeMatches(const MatchType match_type);
@@ -170,8 +170,6 @@ public:
     return descriptors;
   }
 
-  void matchDescriptors(const MatchType match_type);
-
 private:
   cv::Ptr<cv::FeatureDetector> detector_;
   cv::Ptr<cv::DescriptorExtractor> extractor_;
@@ -203,7 +201,7 @@ public:
         output_det_size_(output_det_channel_ * 49 * 15),
         output_desc_size_(output_desc_channel_ * 49 * 15), output_width_(49),
         output_height_(15), conf_thresh_(0.015), dist_thresh_(4),
-        num_threads_(12) {
+        num_threads_(12), border_remove_(4) {
 
     initMatcher();
     initPointers();
@@ -217,7 +215,7 @@ public:
                             const TensorRtPrecision trt_precision,
                             const int input_height, const int input_width,
                             const float conf_thresh, const int dist_thresh,
-                            const int num_threads)
+                            const int num_threads, const int border_remove)
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
                         matcher_type, selector_type, cross_check),
         model_name_prefix_(model_name_prefix), trt_precision_(TRT_FP32),
@@ -228,7 +226,7 @@ public:
                           64),
         output_width_(input_width / 8), output_height_(input_height / 8),
         conf_thresh_(conf_thresh), dist_thresh_(dist_thresh),
-        num_threads_(num_threads) {
+        num_threads_(num_threads), border_remove_(border_remove) {
     assert(input_height % 8 == 0 && input_width % 8 == 0);
 
     initMatcher();
@@ -248,14 +246,18 @@ public:
   }
   void loadTrtEngine();
 
-  void preprocessImage(cv::Mat &img_l, cv::Mat &img_r);
+  void preprocessImage(cv::Mat &img, cv::Mat &projection_matrix);
   void runNeuralNetwork(const cv::Mat &img);
-  std::vector<cv::KeyPoint> postprocessDetection();
-  std::vector<cv::KeyPoint> debugOneBatchOutput();
+  void postprocessDetectionAndDescription(
+      std::vector<cv::KeyPoint> &keypoints_after_nms, cv::Mat &descriptors);
+  Eigen::VectorXf
+  bilinearInterpolationDesc(const Eigen::Tensor<float, 3, Eigen::RowMajor>
+                                &output_desc_tensor_transposed,
+                            const int row, const int col);
+  void debugOneBatchOutput();
   void addStereoImagePair(const cv::Mat &img_l, const cv::Mat &img_r,
                           const cv::Mat &projection_matrix_l,
                           const cv::Mat &projection_matrix_r);
-  void matchDescriptors(const MatchType match_type);
 
   inline int getInputHeight() const { return input_height_; }
   inline int getInputWidth() const { return input_width_; }
@@ -286,6 +288,7 @@ private:
   // postprocessing param
   const float conf_thresh_;
   const int dist_thresh_;
+  const int border_remove_;
 
   sample::Logger g_logger_;
 
