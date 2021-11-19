@@ -45,6 +45,7 @@ std::shared_ptr<message_filters::Synchronizer<StereoSyncPolicy>>
 std::shared_ptr<tf2_ros::Buffer> tf_buffer_ptr;
 std::shared_ptr<tf2_ros::TransformListener> tf_listener;
 // cam0 means gray left camera
+bool base_stamped_tf_cam0_inited = false;
 geometry_msgs::TransformStamped base_stamped_tf_cam0;
 tf2::Transform base_T_cam0;
 
@@ -57,6 +58,8 @@ std::shared_ptr<FeatureFrontEnd> feature_front_end_ptr;
 
 cv_bridge::CvImage matches_viz_cvbridge;
 std::array<image_transport::Publisher, MATCH_TYPE_NUM> pub_matches_img_list;
+
+tf2::Transform cam0_curr_T_cam0_prev_last_valid = tf2::Transform::getIdentity();
 
 cv::Mat
 cameraInfoToKMatrix(const sensor_msgs::CameraInfo::ConstPtr &camera_info_msg) {
@@ -89,7 +92,31 @@ cameraInfoToPMatrix(const sensor_msgs::CameraInfo::ConstPtr &camera_info_msg) {
   return projection_matrix;
 }
 
-void publishOdometry(const tf2::Transform &cam0_curr_T_cam0_prev) {
+void publishOdometry(tf2::Transform cam0_curr_T_cam0_prev) {
+
+  if (!base_stamped_tf_cam0_inited) {
+    tf_buffer_ptr = std::make_shared<tf2_ros::Buffer>();
+    tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_ptr);
+    base_stamped_tf_cam0 = tf_buffer_ptr->lookupTransform(
+        "base_link", "camera_gray_left", ros::Time(0), ros::Duration(3.0));
+    tf2::fromMsg(base_stamped_tf_cam0.transform, base_T_cam0);
+    base_stamped_tf_cam0.header.frame_id = "base";
+    base_stamped_tf_cam0.child_frame_id = "cam0";
+    tf2_ros::StaticTransformBroadcaster static_broadcaster;
+    static_broadcaster.sendTransform(base_stamped_tf_cam0);
+
+    base_stamped_tf_cam0_inited = true;
+  }
+
+  // screen out abnormal results
+  // TODO: move magic numbers to the config file
+  if (cam0_curr_T_cam0_prev.getOrigin().length() > 10) {
+    // vel > 100 m/s
+    cam0_curr_T_cam0_prev = cam0_curr_T_cam0_prev_last_valid;
+  } else {
+    cam0_curr_T_cam0_prev_last_valid = cam0_curr_T_cam0_prev;
+  }
+
   const tf2::Transform base_prev_T_base_curr =
       base_T_cam0 * cam0_curr_T_cam0_prev.inverse() * base_T_cam0.inverse();
   world_T_base_curr *= base_prev_T_base_curr;
@@ -201,15 +228,10 @@ void dataLodaerGoalCallback(
       boost::bind(&stereoCallback, _1, _2, _3, _4));
   ROS_INFO("visual odometry is ready");
 
-  tf_buffer_ptr = std::make_shared<tf2_ros::Buffer>();
-  tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_ptr);
-  base_stamped_tf_cam0 = tf_buffer_ptr->lookupTransform(
-      "base_link", "camera_gray_left", ros::Time(0), ros::Duration(3.0));
-  tf2::fromMsg(base_stamped_tf_cam0.transform, base_T_cam0);
-  base_stamped_tf_cam0.header.frame_id = "base";
-  base_stamped_tf_cam0.child_frame_id = "cam0";
-  tf2_ros::StaticTransformBroadcaster static_broadcaster;
-  static_broadcaster.sendTransform(base_stamped_tf_cam0);
+  visual_odom_path.poses.clear();
+  base_stamped_tf_cam0_inited = false;
+  world_T_base_curr = tf2::Transform::getIdentity();
+  cam0_curr_T_cam0_prev_last_valid = tf2::Transform::getIdentity();
 
   first_frame = true;
 }

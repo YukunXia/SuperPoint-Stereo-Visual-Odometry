@@ -5,8 +5,12 @@
         <param name="descriptor_type" type="string" value="SuperPoint" />
         <param name="matcher_type" type="string" value="BF" />
         <param name="selector_type" type="string" value="NN" />
-        <param name="image_height" type="int" value="120" />
-        <param name="image_width" type="int" value="392" />
+        <param name="image_height" type="int" value="360" />
+        <!-- <param name="image_height" type="int" value="240" /> -->
+        <!-- <param name="image_height" type="int" value="120" /> -->
+        <param name="image_width" type="int" value="1176" />
+        <!-- <param name="image_width" type="int" value="784" /> -->
+        <!-- <param name="image_width" type="int" value="392" /> -->
         <param name="model_name_prefix" type="string" value="superpoint_pretrained" />
         <param name="trt_precision" type="string" value="FP32" />
         <param name="conf_thresh" type="double" value="0.015" />

@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.0.2)
 project(odml_data_processing)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+add_compile_options(-std=c++17)
+
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -14,6 +16,9 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
   roslib
+  nav_msgs
+  eigen_conversions
+  tf2_ros
 )
 
 ## System dependencies are found with CMake's conventions
@@ -149,7 +154,7 @@ add_dependencies(data_processing_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catk
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(data_processing_node
-  ${catkin_LIBRARIES}
+  ${catkin_LIBRARIES} Eigen3::Eigen stdc++fs
 )
 
 #############
