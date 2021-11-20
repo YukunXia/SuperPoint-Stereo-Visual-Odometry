@@ -18,3 +18,5 @@ msg/_*.py
 build_isolated/
 devel_isolated/
 .catkin_workspace
+
+src/odml_data_processing/kitti_results/

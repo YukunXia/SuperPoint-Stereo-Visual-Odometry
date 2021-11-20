@@ -56,7 +56,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Image
       Enabled: true
-      Image Topic: /odml_visual_odometry/matches_visualizationPREV_LEFT_CURR_LEFT
+      Image Topic: /odml_visual_odometry/matches_visualizationCURR_LEFT_PREV_LEFT
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -173,7 +173,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 141.68692016601562
+      Distance: 1405.847900390625
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -181,23 +181,23 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 11.415570259094238
-        Y: 9.718167304992676
-        Z: 3.81815767288208
+        X: 159.85662841796875
+        Y: 26.704544067382812
+        Z: 11.00127124786377
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.5697963237762451
+      Pitch: 1.5497963428497314
       Target Frame: <Fixed Frame>
-      Yaw: 3.085397958755493
+      Yaw: 3.2253968715667725
     Saved: ~
 Window Geometry:
   Displays:
-    collapsed: true
+    collapsed: false
   Height: 2579
-  Hide Left Dock: true
+  Hide Left Dock: false
   Hide Right Dock: false
   Image:
     collapsed: false

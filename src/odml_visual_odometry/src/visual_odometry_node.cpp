@@ -69,7 +69,7 @@ cameraInfoToKMatrix(const sensor_msgs::CameraInfo::ConstPtr &camera_info_msg) {
   // # P = [ 0  fy' cy' Ty]
   // #     [ 0   0   1   0]
   const cv::Mat intrinsics =
-      (cv::Mat1f(3, 3) << camera_info_msg->P[0], camera_info_msg->P[1],
+      (cv::Mat1d(3, 3) << camera_info_msg->P[0], camera_info_msg->P[1],
        camera_info_msg->P[2], camera_info_msg->P[4], camera_info_msg->P[5],
        camera_info_msg->P[6], camera_info_msg->P[8], camera_info_msg->P[9],
        camera_info_msg->P[10]);
@@ -84,7 +84,7 @@ cameraInfoToPMatrix(const sensor_msgs::CameraInfo::ConstPtr &camera_info_msg) {
   // # P = [ 0  fy' cy' Ty]
   // #     [ 0   0   1   0]
   const cv::Mat projection_matrix =
-      (cv::Mat1f(3, 4) << camera_info_msg->P[0], camera_info_msg->P[1],
+      (cv::Mat1d(3, 4) << camera_info_msg->P[0], camera_info_msg->P[1],
        camera_info_msg->P[2], camera_info_msg->P[3], camera_info_msg->P[4],
        camera_info_msg->P[5], camera_info_msg->P[6], camera_info_msg->P[7],
        camera_info_msg->P[8], camera_info_msg->P[9], camera_info_msg->P[10],
@@ -174,13 +174,15 @@ void stereoCallback(
 
   if (first_frame) {
     first_frame = false;
+    feature_front_end_ptr->matchDescriptors(MatchType::CURR_LEFT_CURR_RIGHT);
     publishOdometry(cam0_curr_T_cam0_prev);
     return;
   }
 
   const auto start = std::chrono::system_clock::now();
 
-  for (int i = 0; i < MATCH_TYPE_NUM; ++i) {
+  // no PREV_LEFT_PREV_RIGHT
+  for (int i = 0; i < 2; ++i) {
     const MatchType match_type = static_cast<MatchType>(i);
     feature_front_end_ptr->matchDescriptors(match_type);
     // classic_feature_front_end_ptr->solve5PointsRANSAC(match_type,
@@ -248,17 +250,21 @@ int main(int argc, char **argv) {
     std::string descriptor_type;
     std::string matcher_type;
     std::string selector_type;
+    double stereo_threshold;
+    double min_disparity;
     nh_private.getParam("detector_type", detector_type);
     nh_private.getParam("descriptor_type", descriptor_type);
     nh_private.getParam("matcher_type", matcher_type);
     nh_private.getParam("selector_type", selector_type);
+    nh_private.getParam("stereo_threshold", stereo_threshold);
+    nh_private.getParam("min_disparity", min_disparity);
     feature_front_end_ptr = std::make_shared<ClassicFeatureFrontEnd>(
         detector_name_to_type.at(detector_type),
         descriptor_name_to_type.at(descriptor_type),
         matcher_name_to_type.at(matcher_type),
         selector_name_to_type.at(selector_type),
-        true // cross check. only used in KNN mode
-    );
+        true, // cross check. only used in KNN mode
+        stereo_threshold, min_disparity);
   } else {
     std::string detector_type;
     std::string descriptor_type;
@@ -275,6 +281,8 @@ int main(int argc, char **argv) {
       int dist_thresh;
       int num_threads;
       int border_remove;
+      double stereo_threshold;
+      double min_disparity;
       nh_private.getParam("matcher_type", matcher_type);
       nh_private.getParam("selector_type", selector_type);
       nh_private.getParam("model_name_prefix", model_name_prefix);
@@ -285,6 +293,8 @@ int main(int argc, char **argv) {
       nh_private.getParam("dist_thresh", dist_thresh);
       nh_private.getParam("num_threads", num_threads);
       nh_private.getParam("border_remove", border_remove);
+      nh_private.getParam("stereo_threshold", stereo_threshold);
+      nh_private.getParam("min_disparity", min_disparity);
       if (image_height % 8 != 0 || image_width % 8 != 0) {
         ROS_ERROR("image_height(%d) or image_width(%d) is indivisble by 8",
                   image_height, image_width);
@@ -296,7 +306,7 @@ int main(int argc, char **argv) {
           true, // cross check. only used in KNN mode
           model_name_prefix, trt_precision_string2enum.at(trt_precision),
           image_height, image_width, conf_thresh, dist_thresh, num_threads,
-          border_remove);
+          border_remove, stereo_threshold, min_disparity);
     } else {
       ROS_ERROR("Detector(%s) or descriptor(%s) not implemented",
                 detector_type.c_str(), descriptor_type.c_str());

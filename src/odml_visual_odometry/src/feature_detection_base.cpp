@@ -1,3 +1,6 @@
+#include <eigen3/Eigen/Geometry>
+
+#include <odml_visual_odometry/ceres_cost_function.hpp>
 #include <odml_visual_odometry/feature_detection.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -24,34 +27,12 @@ void FeatureFrontEnd::initMatcher() {
   }
 }
 
-void FeatureFrontEnd::solveStereoOdometry(tf2::Transform &cam0_curr_T_cam0_prev,
-                                          const float stereo_threshold) {
+void FeatureFrontEnd::solveStereoOdometry(
+    tf2::Transform &cam0_curr_T_cam0_prev) {
   const std::vector<cv::DMatch> &cv_Dmatches_curr_stereo =
       cv_DMatches_list[CURR_LEFT_CURR_RIGHT];
   const std::vector<cv::DMatch> &cv_Dmatches_inter_left =
-      cv_DMatches_list[PREV_LEFT_CURR_LEFT];
-
-  // prepare hashsets of curr left keypoint indices
-  std::vector<int> indices_curr_left_from_curr_stereo;
-  // TODO: Stereo epipolar constraint
-  // TODO: handle edge case, disparity = 0
-  std::transform(
-      cv_Dmatches_curr_stereo.begin(), cv_Dmatches_curr_stereo.end(),
-      std::back_inserter(indices_curr_left_from_curr_stereo),
-      [](const cv::DMatch &cv_Dmatch) { return cv_Dmatch.queryIdx; });
-  std::vector<std::pair<int, int>> index_pairs_curr_left_to_prev_left;
-  std::transform(cv_Dmatches_inter_left.begin(), cv_Dmatches_inter_left.end(),
-                 std::back_inserter(index_pairs_curr_left_to_prev_left),
-                 [](const cv::DMatch &cv_Dmatch) -> std::pair<int, int> {
-                   return {cv_Dmatch.trainIdx, cv_Dmatch.queryIdx};
-                 });
-
-  const std::unordered_set<int> set_of_indices_curr_left_from_curr_stereo(
-      indices_curr_left_from_curr_stereo.begin(),
-      indices_curr_left_from_curr_stereo.end());
-  const std::unordered_map<int, int> map_of_indices_curr_left_to_prev_left(
-      index_pairs_curr_left_to_prev_left.begin(),
-      index_pairs_curr_left_to_prev_left.end());
+      cv_DMatches_list[CURR_LEFT_PREV_LEFT];
 
   // extract common feature points in both matches
   std::vector<cv::Point2f> keypoints_curr_left;
@@ -60,11 +41,13 @@ void FeatureFrontEnd::solveStereoOdometry(tf2::Transform &cam0_curr_T_cam0_prev,
   keypoints_curr_right.reserve(cv_Dmatches_curr_stereo.size());
   std::vector<cv::Point2f> keypoints_prev_left;
   keypoints_prev_left.reserve(cv_Dmatches_curr_stereo.size());
+  std::vector<cv::Point2f> keypoints_prev_right;
+  keypoints_prev_right.reserve(cv_Dmatches_curr_stereo.size());
 
   for (const auto &cv_Dmatch : cv_Dmatches_curr_stereo) {
     const int index_curr_left = cv_Dmatch.queryIdx;
-    if (map_of_indices_curr_left_to_prev_left.find(index_curr_left) ==
-        map_of_indices_curr_left_to_prev_left.end())
+    if (maps_of_indices[CURR_LEFT_PREV_LEFT].find(index_curr_left) ==
+        maps_of_indices[CURR_LEFT_PREV_LEFT].end())
       continue;
 
     const cv::Point2f &keypoint_curr_left =
@@ -73,19 +56,30 @@ void FeatureFrontEnd::solveStereoOdometry(tf2::Transform &cam0_curr_T_cam0_prev,
         keypoints_dq.end()[CURR_RIGHT][cv_Dmatch.trainIdx].pt;
 
     if (std::abs(keypoint_curr_left.y - keypoint_curr_right.y) >
-            stereo_threshold ||
-        std::abs(keypoint_curr_left.x - keypoint_curr_right.x) < 0.25f)
+            stereo_threshold_ ||
+        std::abs(keypoint_curr_left.x - keypoint_curr_right.x) < min_disparity_)
       continue;
 
+    const int index_prev_left =
+        maps_of_indices[CURR_LEFT_PREV_LEFT].at(index_curr_left);
     const cv::Point2f &keypoint_prev_left =
-        keypoints_dq
-            .end()[PREV_LEFT]
-                  [map_of_indices_curr_left_to_prev_left.at(index_curr_left)]
-            .pt;
+        keypoints_dq.end()[PREV_LEFT][index_prev_left].pt;
 
     keypoints_curr_left.push_back(keypoint_curr_left);
     keypoints_curr_right.push_back(keypoint_curr_right);
     keypoints_prev_left.push_back(keypoint_prev_left);
+
+    if (maps_of_indices[PREV_LEFT_PREV_RIGHT].find(index_prev_left) !=
+        maps_of_indices[PREV_LEFT_PREV_RIGHT].end()) {
+      const int index_prev_right =
+          maps_of_indices[PREV_LEFT_PREV_RIGHT].at(index_prev_left);
+      const cv::Point2f keypoint_prev_right =
+          keypoints_dq.end()[PREV_RIGHT][index_prev_right].pt;
+      keypoints_prev_right.push_back(keypoint_prev_right);
+    } else {
+      // invalid results as placeholders
+      keypoints_prev_right.emplace_back(-1.0f, -1.0f);
+    }
   }
 
   // triangulation
@@ -99,18 +93,21 @@ void FeatureFrontEnd::solveStereoOdometry(tf2::Transform &cam0_curr_T_cam0_prev,
   curr_left_point4d = curr_left_point4d.reshape(4, curr_left_point4d.rows);
 
   cv::Mat curr_left_point3d;
-  // curr_left_point3d: 64FC3 Nx1
+  // curr_left_point3d: 32FC3 Nx1
   cv::convertPointsFromHomogeneous(curr_left_point4d, curr_left_point3d);
 
   // PnP
   const cv::Mat intrinsics_l = projection_matrix_l_.colRange(0, 3);
+  // 32SC1 num_pointsx1 -> each at<int>(row,0) is an int index
   cv::Mat inliers;
-  const cv::Mat distortion = cv::Mat::zeros(4, 1, CV_32FC1);
+  const cv::Mat distortion = cv::Mat::zeros(4, 1, CV_64FC1);
+  // cv::Mat::zeros(3, 1, CV_64FC1);
   cv::Mat r_vec = r_vec_pred.clone();
-  cv::Mat t = t_pred.clone();
+  // cv::Mat::zeros(3, 1, CV_64FC1);
+  cv::Mat t_vec = t_vec_pred.clone();
   bool pnp_result = cv::solvePnPRansac(
       curr_left_point3d, keypoints_prev_left, intrinsics_l, distortion, r_vec,
-      t, false, 500, 2.0, 0.999, inliers, cv::SOLVEPNP_EPNP);
+      t_vec, false, 500, 2.0, 0.999, inliers, cv::SOLVEPNP_EPNP);
 
   if (!pnp_result) {
     ROS_ERROR(
@@ -118,36 +115,75 @@ void FeatureFrontEnd::solveStereoOdometry(tf2::Transform &cam0_curr_T_cam0_prev,
     ROS_INFO("keypoints_curr_left size = %lu", keypoints_curr_left.size());
     ROS_INFO("inliers rows = %d, cols = %d", inliers.rows, inliers.cols);
     r_vec = r_vec_pred.clone();
-    t = t_pred.clone();
+    t_vec = t_vec_pred.clone();
   } else {
     r_vec_pred = r_vec.clone();
-    t_pred = t.clone();
+    t_vec_pred = t_vec.clone();
   }
 
   cv::Mat R;
   cv::Rodrigues(r_vec, R);
 
   // TODO: use inliers to refine PnP
+  const Eigen::Vector3d axis_angle(
+      r_vec.at<double>(0, 0), r_vec.at<double>(1, 0), r_vec.at<double>(2, 0));
+  const double angle = axis_angle.norm();
+  const Eigen::Vector3d axis = axis_angle.normalized();
+  Eigen::Quaterniond q_to_be_optmz(Eigen::AngleAxisd(angle, axis));
+  Eigen::Vector3d t_to_be_optmz(t_vec.at<double>(0, 0), t_vec.at<double>(1, 0),
+                                t_vec.at<double>(2, 0));
+
+  // unit: pixel
+  ceres::LossFunction *loss_function = new ceres::HuberLoss(1.0);
+  ceres::Problem::Options problem_options;
+  ceres::Problem problem(problem_options);
+
+  // project 3d point at curr frame to a 2d point at prev left & right frame
+  for (int i = 0; i < inliers.rows; ++i) {
+    const int index = inliers.at<int>(i, 0);
+
+    // project 3d point at curr frame to a 2d point at prev left frame
+    ceres::CostFunction *cost_function_l = CostFunctor32::Create(
+        curr_left_point3d.at<cv::Vec3f>(index, 0),
+        keypoints_prev_left.at(index), projection_matrix_l_, false);
+    problem.AddResidualBlock(cost_function_l, loss_function,
+                             q_to_be_optmz.coeffs().data(),
+                             t_to_be_optmz.data());
+
+    // if the mapping path from curr left to prev right is valid
+    if (keypoints_prev_right.at(index).x >= 0.0f &&
+        keypoints_prev_right.at(index).y >= 0.0f) {
+      // project 3d point at curr frame to a 2d point at prev right frame
+      ceres::CostFunction *cost_function_r = CostFunctor32::Create(
+          curr_left_point3d.at<cv::Vec3f>(index, 0),
+          keypoints_prev_right.at(index), projection_matrix_r_, false);
+      problem.AddResidualBlock(cost_function_r, loss_function,
+                               q_to_be_optmz.coeffs().data(),
+                               t_to_be_optmz.data());
+    }
+  }
+
+  problem.SetParameterization(q_to_be_optmz.coeffs().data(),
+                              new ceres::EigenQuaternionParameterization);
+
+  ceres::Solver::Options solver_options;
+  solver_options.max_num_iterations = 20;
+  solver_options.linear_solver_type = ceres::DENSE_QR;
+  ceres::Solver::Summary summary;
+  ceres::Solve(solver_options, &problem, &summary);
+  if (!summary.IsSolutionUsable() ||
+      summary.termination_type != ceres::TerminationType::CONVERGENCE) {
+    ROS_ERROR("summary.IsSolutionUsable() == false or NOT CONVERGENT");
+    ROS_ERROR("Ceres solver report: \n%s", summary.FullReport().c_str());
+  }
 
   // output
   tf2::Transform cam0_prev_T_cam0_curr;
-  const tf2::Matrix3x3 R_tf2(
-      R.at<double>(0, 0), R.at<double>(0, 1), R.at<double>(0, 2),
-      R.at<double>(1, 0), R.at<double>(1, 1), R.at<double>(1, 2),
-      R.at<double>(2, 0), R.at<double>(2, 1), R.at<double>(2, 2));
-  cam0_prev_T_cam0_curr.setBasis(R_tf2);
+  cam0_prev_T_cam0_curr.setRotation(
+      tf2::Quaternion(q_to_be_optmz.x(), q_to_be_optmz.y(), q_to_be_optmz.z(),
+                      q_to_be_optmz.w()));
   cam0_prev_T_cam0_curr.setOrigin(
-      tf2::Vector3(t.at<double>(0, 0), t.at<double>(1, 0), t.at<double>(2, 0)));
-
-  // tf2::Quaternion q_tf2 = cam0_prev_T_cam0_curr.getRotation();
-  // ROS_INFO("From PnP, cam0_prev_T_cam0_curr.rotation():\n axis = %.4f, %.4f,
-  // "
-  //          "%.4f, and angle = %.4f",
-  //          q_tf2.getAxis().getX(), q_tf2.getAxis().getY(),
-  //          q_tf2.getAxis().getZ(), q_tf2.getAngle());
-  // ROS_INFO(
-  //     "From PnP, cam0_prev_T_cam0_curr.translation():\n t = %.4f, %.4f,
-  //     %.4f", t.at<double>(0, 0), t.at<double>(1, 0), t.at<double>(2, 0));
+      tf2::Vector3(t_to_be_optmz(0), t_to_be_optmz(1), t_to_be_optmz(2)));
 
   cam0_curr_T_cam0_prev = cam0_prev_T_cam0_curr.inverse();
 }
@@ -219,8 +255,24 @@ void FeatureFrontEnd::matchDescriptors(const MatchType match_type) {
     }
   }
 
-  if (match_type == MatchType::CURR_LEFT_CURR_RIGHT)
-    ROS_INFO("%lu matches for CURR_LEFT_CURR_RIGHT", cv_Dmatches.size());
-  else if (match_type == MatchType::PREV_LEFT_CURR_LEFT)
-    ROS_INFO("%lu matches for PREV_LEFT_CURR_LEFT", cv_Dmatches.size());
+  std::vector<std::pair<int, int>> index_pairs;
+  std::transform(cv_Dmatches.begin(), cv_Dmatches.end(),
+                 std::back_inserter(index_pairs),
+                 [](const cv::DMatch &cv_Dmatch) -> std::pair<int, int> {
+                   // queryIdx: keypoints0; trainIdx: keypoints1
+                   return {cv_Dmatch.queryIdx, cv_Dmatch.trainIdx};
+                 });
+
+  if (match_type == MatchType::CURR_LEFT_CURR_RIGHT) {
+    // before updating the CURR_LEFT_CURR_RIGHT, assign PREV_LEFT_PREV_RIGHT to
+    // be the unupdated CURR_LEFT_CURR_RIGHT, which is the previous time frame's
+    // CURR_LEFT_CURR_RIGHT
+    maps_of_indices[MatchType::PREV_LEFT_PREV_RIGHT] =
+        maps_of_indices[MatchType::CURR_LEFT_CURR_RIGHT];
+  }
+  maps_of_indices[match_type] =
+      std::unordered_map<int, int>(index_pairs.begin(), index_pairs.end());
+
+  ROS_INFO("%lu matches for %s", cv_Dmatches.size(),
+           MatchType_str[match_type].c_str());
 }

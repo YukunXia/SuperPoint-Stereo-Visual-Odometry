@@ -15,6 +15,8 @@ message("-- CUDA version: ${CUDA_VERSION}")
 
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
+find_package(Ceres REQUIRED PATHS "/usr/local/lib/cmake/Ceres/")
+
 find_package(catkin REQUIRED COMPONENTS
   actionlib_msgs
   cv_bridge
@@ -159,8 +161,7 @@ add_library(feature_detection
 add_dependencies(feature_detection ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(feature_detection
   ${catkin_LIBRARIES} 
-  ${OpenCV_LIBS}
-  nvinfer cudart Eigen3::Eigen
+  ${OpenCV_LIBS} nvinfer cudart Eigen3::Eigen ${CERES_LIBRARIES}
 )
 set_target_properties(feature_detection PROPERTIES PUBLIC_HEADER include/${PROJECT_NAME}/feature_detection.hpp)
 

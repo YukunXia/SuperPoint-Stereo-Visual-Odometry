@@ -18,5 +18,6 @@
         <!-- adapt num_threads after check num of cores from `lscpu`-->
         <param name="num_threads" type="int" value="6" />
         <param name="border_remove" type="int" value="4" />
+        <param name="stereo_threshold" type="double" value="2.0" />
     </node>
 </launch>
