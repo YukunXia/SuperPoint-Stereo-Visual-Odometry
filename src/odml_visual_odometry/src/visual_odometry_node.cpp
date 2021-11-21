@@ -230,6 +230,8 @@ void dataLodaerGoalCallback(
       boost::bind(&stereoCallback, _1, _2, _3, _4));
   ROS_INFO("visual odometry is ready");
 
+  feature_front_end_ptr->clearLagecyData();
+
   visual_odom_path.poses.clear();
   base_stamped_tf_cam0_inited = false;
   world_T_base_curr = tf2::Transform::getIdentity();
@@ -252,19 +254,21 @@ int main(int argc, char **argv) {
     std::string selector_type;
     double stereo_threshold;
     double min_disparity;
+    int refinement_degree;
     nh_private.getParam("detector_type", detector_type);
     nh_private.getParam("descriptor_type", descriptor_type);
     nh_private.getParam("matcher_type", matcher_type);
     nh_private.getParam("selector_type", selector_type);
     nh_private.getParam("stereo_threshold", stereo_threshold);
     nh_private.getParam("min_disparity", min_disparity);
+    nh_private.getParam("refinement_degree", refinement_degree);
     feature_front_end_ptr = std::make_shared<ClassicFeatureFrontEnd>(
         detector_name_to_type.at(detector_type),
         descriptor_name_to_type.at(descriptor_type),
         matcher_name_to_type.at(matcher_type),
         selector_name_to_type.at(selector_type),
         true, // cross check. only used in KNN mode
-        stereo_threshold, min_disparity);
+        stereo_threshold, min_disparity, refinement_degree);
   } else {
     std::string detector_type;
     std::string descriptor_type;
@@ -283,6 +287,7 @@ int main(int argc, char **argv) {
       int border_remove;
       double stereo_threshold;
       double min_disparity;
+      int refinement_degree;
       nh_private.getParam("matcher_type", matcher_type);
       nh_private.getParam("selector_type", selector_type);
       nh_private.getParam("model_name_prefix", model_name_prefix);
@@ -295,6 +300,7 @@ int main(int argc, char **argv) {
       nh_private.getParam("border_remove", border_remove);
       nh_private.getParam("stereo_threshold", stereo_threshold);
       nh_private.getParam("min_disparity", min_disparity);
+      nh_private.getParam("refinement_degree", refinement_degree);
       if (image_height % 8 != 0 || image_width % 8 != 0) {
         ROS_ERROR("image_height(%d) or image_width(%d) is indivisble by 8",
                   image_height, image_width);
@@ -306,7 +312,7 @@ int main(int argc, char **argv) {
           true, // cross check. only used in KNN mode
           model_name_prefix, trt_precision_string2enum.at(trt_precision),
           image_height, image_width, conf_thresh, dist_thresh, num_threads,
-          border_remove, stereo_threshold, min_disparity);
+          border_remove, stereo_threshold, min_disparity, refinement_degree);
     } else {
       ROS_ERROR("Detector(%s) or descriptor(%s) not implemented",
                 detector_type.c_str(), descriptor_type.c_str());

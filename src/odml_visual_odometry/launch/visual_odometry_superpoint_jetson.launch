@@ -19,5 +19,6 @@
         <param name="num_threads" type="int" value="6" />
         <param name="border_remove" type="int" value="4" />
         <param name="stereo_threshold" type="double" value="2.0" />
+        <param name="refinement_degree" type="int" value="4" />
     </node>
 </launch>

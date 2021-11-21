@@ -27,6 +27,23 @@ void FeatureFrontEnd::initMatcher() {
   }
 }
 
+void FeatureFrontEnd::clearLagecyData() {
+  images_dq.clear();
+  keypoints_dq.clear();
+  descriptors_dq.clear();
+  for (auto &cv_DMatches : cv_DMatches_list) {
+    cv_DMatches.clear();
+  }
+  r_vec_pred = cv::Mat::zeros(3, 1, CV_64FC1);
+  t_vec_pred = cv::Mat::zeros(3, 1, CV_64FC1);
+  for (auto &map_of_indices : maps_of_indices) {
+    map_of_indices.clear();
+  }
+  prev_left_points_3d_inited = false;
+}
+
+// entering into this function means there's at least 2 time frames
+// TODO: add assertion to check
 void FeatureFrontEnd::solveStereoOdometry(
     tf2::Transform &cam0_curr_T_cam0_prev) {
   const std::vector<cv::DMatch> &cv_Dmatches_curr_stereo =
@@ -44,35 +61,49 @@ void FeatureFrontEnd::solveStereoOdometry(
   std::vector<cv::Point2f> keypoints_prev_right;
   keypoints_prev_right.reserve(cv_Dmatches_curr_stereo.size());
 
+  if (refinement_degree_ >= 3) {
+    // `map_from_matched_to_valid_index` will be used in the next time frame
+    // -1 means invalid
+    map_from_curr_left_matched_to_curr_valid_index.clear();
+    map_from_curr_left_matched_to_curr_valid_index.resize(
+        keypoints_dq.end()[CURR_LEFT].size(), -1);
+    map_from_curr_valid_to_prev_left_matched_index.clear();
+    map_from_curr_valid_to_prev_left_matched_index.reserve(
+        cv_Dmatches_curr_stereo.size());
+  }
+
   for (const auto &cv_Dmatch : cv_Dmatches_curr_stereo) {
-    const int index_curr_left = cv_Dmatch.queryIdx;
-    if (maps_of_indices[CURR_LEFT_PREV_LEFT].find(index_curr_left) ==
+    const int matched_index_curr_left = cv_Dmatch.queryIdx;
+
+    if (maps_of_indices[CURR_LEFT_PREV_LEFT].find(matched_index_curr_left) ==
         maps_of_indices[CURR_LEFT_PREV_LEFT].end())
       continue;
 
     const cv::Point2f &keypoint_curr_left =
-        keypoints_dq.end()[CURR_LEFT][index_curr_left].pt;
+        keypoints_dq.end()[CURR_LEFT][matched_index_curr_left].pt;
     const cv::Point2f &keypoint_curr_right =
         keypoints_dq.end()[CURR_RIGHT][cv_Dmatch.trainIdx].pt;
 
+    // if not passing stereo checks (y distance & min disparity) => discard
     if (std::abs(keypoint_curr_left.y - keypoint_curr_right.y) >
             stereo_threshold_ ||
         std::abs(keypoint_curr_left.x - keypoint_curr_right.x) < min_disparity_)
       continue;
 
-    const int index_prev_left =
-        maps_of_indices[CURR_LEFT_PREV_LEFT].at(index_curr_left);
+    // from here, no filtering will be applied
+    const int matched_index_prev_left =
+        maps_of_indices[CURR_LEFT_PREV_LEFT].at(matched_index_curr_left);
     const cv::Point2f &keypoint_prev_left =
-        keypoints_dq.end()[PREV_LEFT][index_prev_left].pt;
+        keypoints_dq.end()[PREV_LEFT][matched_index_prev_left].pt;
 
     keypoints_curr_left.push_back(keypoint_curr_left);
     keypoints_curr_right.push_back(keypoint_curr_right);
     keypoints_prev_left.push_back(keypoint_prev_left);
 
-    if (maps_of_indices[PREV_LEFT_PREV_RIGHT].find(index_prev_left) !=
+    if (maps_of_indices[PREV_LEFT_PREV_RIGHT].find(matched_index_prev_left) !=
         maps_of_indices[PREV_LEFT_PREV_RIGHT].end()) {
       const int index_prev_right =
-          maps_of_indices[PREV_LEFT_PREV_RIGHT].at(index_prev_left);
+          maps_of_indices[PREV_LEFT_PREV_RIGHT].at(matched_index_prev_left);
       const cv::Point2f keypoint_prev_right =
           keypoints_dq.end()[PREV_RIGHT][index_prev_right].pt;
       keypoints_prev_right.push_back(keypoint_prev_right);
@@ -80,21 +111,32 @@ void FeatureFrontEnd::solveStereoOdometry(
       // invalid results as placeholders
       keypoints_prev_right.emplace_back(-1.0f, -1.0f);
     }
+
+    if (refinement_degree_ >= 3) {
+      assert(keypoints_curr_left.size() > 0);
+      map_from_curr_left_matched_to_curr_valid_index.at(
+          matched_index_curr_left) = keypoints_curr_left.size() - 1;
+      map_from_curr_left_matched_to_curr_valid_index.push_back(
+          matched_index_curr_left);
+      map_from_curr_valid_to_prev_left_matched_index.push_back(
+          matched_index_prev_left);
+    }
   }
 
   // triangulation
-  cv::Mat curr_left_point4d;
+  cv::Mat curr_left_points_4d;
   cv::triangulatePoints(projection_matrix_l_, projection_matrix_r_,
                         keypoints_curr_left, keypoints_curr_right,
-                        curr_left_point4d);
-  // curr_left_point4d: 64FC1 4xN => 64FC1 Nx4
-  curr_left_point4d = curr_left_point4d.t();
-  // curr_left_point4d: 64FC1 Nx4 => 64FC4 Nx1
-  curr_left_point4d = curr_left_point4d.reshape(4, curr_left_point4d.rows);
+                        curr_left_points_4d);
+  // curr_left_points_4d: 64FC1 4xN => 64FC1 Nx4
+  curr_left_points_4d = curr_left_points_4d.t();
+  // curr_left_points_4d: 64FC1 Nx4 => 64FC4 Nx1
+  curr_left_points_4d =
+      curr_left_points_4d.reshape(4, curr_left_points_4d.rows);
 
-  cv::Mat curr_left_point3d;
-  // curr_left_point3d: 32FC3 Nx1
-  cv::convertPointsFromHomogeneous(curr_left_point4d, curr_left_point3d);
+  cv::Mat curr_left_points_3d;
+  // curr_left_points_3d: 32FC3 Nx1
+  cv::convertPointsFromHomogeneous(curr_left_points_4d, curr_left_points_3d);
 
   // PnP
   const cv::Mat intrinsics_l = projection_matrix_l_.colRange(0, 3);
@@ -106,7 +148,7 @@ void FeatureFrontEnd::solveStereoOdometry(
   // cv::Mat::zeros(3, 1, CV_64FC1);
   cv::Mat t_vec = t_vec_pred.clone();
   bool pnp_result = cv::solvePnPRansac(
-      curr_left_point3d, keypoints_prev_left, intrinsics_l, distortion, r_vec,
+      curr_left_points_3d, keypoints_prev_left, intrinsics_l, distortion, r_vec,
       t_vec, false, 500, 2.0, 0.999, inliers, cv::SOLVEPNP_EPNP);
 
   if (!pnp_result) {
@@ -120,9 +162,6 @@ void FeatureFrontEnd::solveStereoOdometry(
     r_vec_pred = r_vec.clone();
     t_vec_pred = t_vec.clone();
   }
-
-  cv::Mat R;
-  cv::Rodrigues(r_vec, R);
 
   // TODO: use inliers to refine PnP
   const Eigen::Vector3d axis_angle(
@@ -140,27 +179,70 @@ void FeatureFrontEnd::solveStereoOdometry(
 
   // project 3d point at curr frame to a 2d point at prev left & right frame
   for (int i = 0; i < inliers.rows; ++i) {
-    const int index = inliers.at<int>(i, 0);
+    // this index works for keypoints_curr_left, keypoints_curr_right,
+    // keypoints_prev_left and keypoint_prev_right in context of the
+    // triangulation of the current stereo images
+    const int curr_valid_index = inliers.at<int>(i, 0);
 
     // project 3d point at curr frame to a 2d point at prev left frame
     ceres::CostFunction *cost_function_l = CostFunctor32::Create(
-        curr_left_point3d.at<cv::Vec3f>(index, 0),
-        keypoints_prev_left.at(index), projection_matrix_l_, false);
+        curr_left_points_3d.at<cv::Vec3f>(curr_valid_index, 0),
+        keypoints_prev_left.at(curr_valid_index), projection_matrix_l_, false);
     problem.AddResidualBlock(cost_function_l, loss_function,
                              q_to_be_optmz.coeffs().data(),
                              t_to_be_optmz.data());
 
+    if (refinement_degree_ <= 1) continue;
+
     // if the mapping path from curr left to prev right is valid
-    if (keypoints_prev_right.at(index).x >= 0.0f &&
-        keypoints_prev_right.at(index).y >= 0.0f) {
+    if (keypoints_prev_right.at(curr_valid_index).x >= 0.0f &&
+        keypoints_prev_right.at(curr_valid_index).y >= 0.0f) {
       // project 3d point at curr frame to a 2d point at prev right frame
       ceres::CostFunction *cost_function_r = CostFunctor32::Create(
-          curr_left_point3d.at<cv::Vec3f>(index, 0),
-          keypoints_prev_right.at(index), projection_matrix_r_, false);
+          curr_left_points_3d.at<cv::Vec3f>(curr_valid_index, 0),
+          keypoints_prev_right.at(curr_valid_index), projection_matrix_r_,
+          false);
       problem.AddResidualBlock(cost_function_r, loss_function,
                                q_to_be_optmz.coeffs().data(),
                                t_to_be_optmz.data());
     }
+
+    if (refinement_degree_ <= 2) continue;
+
+    // Not necessarily optimal, but the current setting is that only after
+    // this function is run once, will the following optimization factors been
+    // considered
+    if (!prev_left_points_3d_inited)
+      continue;
+
+    const int matched_index_prev_left =
+        map_from_curr_valid_to_prev_left_matched_index.at(curr_valid_index);
+    const int valid_index_prev_left =
+        map_from_prev_left_matched_to_prev_valid_index.at(
+            matched_index_prev_left);
+    if (valid_index_prev_left == -1)
+      continue;
+
+    // project 3d point at curr frame to a 2d point at prev left frame
+    ceres::CostFunction *cost_function_l_inverse = CostFunctor32::Create(
+        prev_left_points_3d.at<cv::Vec3f>(valid_index_prev_left, 0),
+        keypoints_curr_left.at(curr_valid_index), projection_matrix_l_, true);
+    problem.AddResidualBlock(cost_function_l_inverse, loss_function,
+                             q_to_be_optmz.coeffs().data(),
+                             t_to_be_optmz.data());
+
+    assert(keypoints_curr_right.at(curr_valid_index).x >= 0.0f &&
+           keypoints_curr_right.at(curr_valid_index).y >= 0.0f);
+
+    if (refinement_degree_ <= 3) continue;
+
+    // project 3d point at curr frame to a 2d point at prev right frame
+    ceres::CostFunction *cost_function_r_inverse = CostFunctor32::Create(
+        prev_left_points_3d.at<cv::Vec3f>(valid_index_prev_left, 0),
+        keypoints_curr_right.at(curr_valid_index), projection_matrix_r_, true);
+    problem.AddResidualBlock(cost_function_r_inverse, loss_function,
+                             q_to_be_optmz.coeffs().data(),
+                             t_to_be_optmz.data());
   }
 
   problem.SetParameterization(q_to_be_optmz.coeffs().data(),
@@ -186,6 +268,14 @@ void FeatureFrontEnd::solveStereoOdometry(
       tf2::Vector3(t_to_be_optmz(0), t_to_be_optmz(1), t_to_be_optmz(2)));
 
   cam0_curr_T_cam0_prev = cam0_prev_T_cam0_curr.inverse();
+
+  if (refinement_degree_ >= 3) {
+    map_from_prev_left_matched_to_prev_valid_index =
+        map_from_curr_left_matched_to_curr_valid_index;
+    curr_left_points_3d.copyTo(prev_left_points_3d);
+    // prev_left_points_3d = curr_left_points_3d.clone();
+    prev_left_points_3d_inited = true;
+  }
 }
 
 // TODO: Add mask visualization (cautious for empty mask)
