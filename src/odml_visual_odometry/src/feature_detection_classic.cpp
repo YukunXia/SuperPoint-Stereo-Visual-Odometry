@@ -104,14 +104,14 @@ void ClassicFeatureFrontEnd::addStereoImagePair(
   descriptors_dq.push_back(describeKeypoints(keypoints_dq.rbegin()[1], img_l));
   descriptors_dq.push_back(describeKeypoints(keypoints_dq.rbegin()[0], img_r));
 
-  while (images_dq.size() > 4) {
+  while (images_dq.size() > NUM_IMAGE_POSITIONS) {
     images_dq.pop_front();
     keypoints_dq.pop_front();
     descriptors_dq.pop_front();
   }
 
-  assert(keypoints_dq.size() <= 4);
-  assert(descriptors_dq.size() <= 4);
+  assert(keypoints_dq.size() <= NUM_IMAGE_POSITIONS);
+  assert(descriptors_dq.size() <= NUM_IMAGE_POSITIONS);
 
   const auto end = std::chrono::system_clock::now();
   ROS_INFO(

@@ -67,7 +67,8 @@ enum ImagePosition {
   PREV_LEFT = -4,
   PREV_RIGHT = -3,
   CURR_LEFT = -2,
-  CURR_RIGHT = -1
+  CURR_RIGHT = -1,
+  NUM_IMAGE_POSITIONS = 4
 };
 
 enum MatchType {
@@ -93,12 +94,14 @@ public:
                   const DescriptorType descriptor_type,
                   const MatcherType matcher_type,
                   const SelectorType selector_type, const bool cross_check,
-                  const float stereo_threshold, const float min_disparity)
+                  const float stereo_threshold, const float min_disparity,
+                  const int refinement_degree)
       : detector_type_(detector_type), descriptor_type_(descriptor_type),
         matcher_type_(matcher_type), selector_type_(selector_type),
         cross_check_(cross_check), stereo_threshold_(stereo_threshold),
-        min_disparity_(min_disparity) {}
+        min_disparity_(min_disparity), refinement_degree_(refinement_degree) {}
   void initMatcher();
+  void clearLagecyData();
   virtual void addStereoImagePair(const cv::Mat &img_l, const cv::Mat &img_r,
                                   const cv::Mat &projection_matrix_l,
                                   const cv::Mat &projection_matrix_r) = 0;
@@ -108,6 +111,9 @@ public:
 
   std::deque<cv::Mat> images_dq;
   std::deque<std::vector<cv::KeyPoint>> keypoints_dq;
+  // // valid means that these keypoints passed both CURR_LEFT_CURR_RIGHT and
+  // CURR_LEFT_PREV_LEFT std::deque<std::vector<cv::KeyPoint>>
+  // keypoints_valid_dq;
   std::deque<cv::Mat> descriptors_dq;
   std::array<std::vector<cv::DMatch>, MATCH_TYPE_NUM> cv_DMatches_list;
 
@@ -120,6 +126,8 @@ protected:
   const bool cross_check_;
   const float stereo_threshold_;
   const float min_disparity_;
+  // nums of nonlinear least square optmz factor per time frame
+  const int refinement_degree_;
 
   cv::Ptr<cv::DescriptorMatcher> matcher_;
 
@@ -130,6 +138,16 @@ protected:
   cv::Mat t_vec_pred = cv::Mat::zeros(3, 1, CV_64FC1);
 
   std::array<std::unordered_map<int, int>, MATCH_TYPE_NUM> maps_of_indices;
+
+  // will not be used if refinement_degree <= 2
+  bool prev_left_points_3d_inited = false;
+  cv::Mat prev_left_points_3d;
+  // -1 means invalid, valide means in the last time frame, the points with
+  // these indices passed both CURR_LEFT_CURR_RIGHT, CURR_LEFT_PREV_LEFT and
+  // stereo checks. Valid indices are also the indices for the triangulation.
+  std::vector<int> map_from_prev_left_matched_to_prev_valid_index;
+  std::vector<int> map_from_curr_valid_to_prev_left_matched_index;
+  std::vector<int> map_from_curr_left_matched_to_curr_valid_index;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -140,7 +158,8 @@ class ClassicFeatureFrontEnd : public FeatureFrontEnd {
 public:
   ClassicFeatureFrontEnd()
       : FeatureFrontEnd(DetectorType::ShiTomasi, DescriptorType::ORB,
-                        MatcherType::BF, SelectorType::NN, true, 2.0f, 1.0f) {
+                        MatcherType::BF, SelectorType::NN, true, 2.0f, 1.0f,
+                        4) {
     initDetector();
     initDescriptor();
     initMatcher();
@@ -151,10 +170,10 @@ public:
                          const MatcherType matcher_type,
                          const SelectorType selector_type,
                          const bool cross_check, const float stereo_threshold,
-                         const float min_disparity)
+                         const float min_disparity, const int refinement_degree)
       : FeatureFrontEnd(detector_type, descriptor_type, matcher_type,
                         selector_type, cross_check, stereo_threshold,
-                        stereo_threshold) {
+                        stereo_threshold, refinement_degree) {
     initDetector();
     initDescriptor();
     initMatcher();
@@ -205,7 +224,7 @@ class SuperPointFeatureFrontEnd : public FeatureFrontEnd {
 public:
   SuperPointFeatureFrontEnd()
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
-                        MatcherType::BF, SelectorType::NN, true, 2.0f, 1.0f),
+                        MatcherType::BF, SelectorType::NN, true, 2.0f, 1.0f, 4),
         model_name_prefix_("superpoint_pretrained"), trt_precision_(TRT_FP32),
         input_height_(120), input_width_(392), input_size_(120 * 392),
         output_det_size_(output_det_channel_ * 49 * 15),
@@ -224,10 +243,11 @@ public:
       const TensorRtPrecision trt_precision, const int input_height,
       const int input_width, const float conf_thresh, const int dist_thresh,
       const int num_threads, const int border_remove,
-      const float stereo_threshold, const float min_disparity)
+      const float stereo_threshold, const float min_disparity,
+      const int refinement_degree)
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
                         matcher_type, selector_type, cross_check,
-                        stereo_threshold, min_disparity),
+                        stereo_threshold, min_disparity, refinement_degree),
         model_name_prefix_(model_name_prefix), trt_precision_(TRT_FP32),
         input_height_(input_height), input_width_(input_width),
         input_size_(input_height * input_width),
