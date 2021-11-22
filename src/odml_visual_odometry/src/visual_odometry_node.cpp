@@ -278,6 +278,7 @@ int main(int argc, char **argv) {
       std::string matcher_type;
       std::string selector_type;
       std::string model_name_prefix;
+      int model_batch_size;
       std::string trt_precision;
       int image_height;
       int image_width;
@@ -291,6 +292,7 @@ int main(int argc, char **argv) {
       nh_private.getParam("matcher_type", matcher_type);
       nh_private.getParam("selector_type", selector_type);
       nh_private.getParam("model_name_prefix", model_name_prefix);
+      nh_private.getParam("model_batch_size", model_batch_size);
       nh_private.getParam("trt_precision", trt_precision);
       nh_private.getParam("image_height", image_height);
       nh_private.getParam("image_width", image_width);
@@ -310,9 +312,10 @@ int main(int argc, char **argv) {
           matcher_name_to_type.at(matcher_type),
           selector_name_to_type.at(selector_type),
           true, // cross check. only used in KNN mode
-          model_name_prefix, trt_precision_string2enum.at(trt_precision),
-          image_height, image_width, conf_thresh, dist_thresh, num_threads,
-          border_remove, stereo_threshold, min_disparity, refinement_degree);
+          model_name_prefix, model_batch_size,
+          trt_precision_string2enum.at(trt_precision), image_height,
+          image_width, conf_thresh, dist_thresh, num_threads, border_remove,
+          stereo_threshold, min_disparity, refinement_degree);
     } else {
       ROS_ERROR("Detector(%s) or descriptor(%s) not implemented",
                 detector_type.c_str(), descriptor_type.c_str());

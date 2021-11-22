@@ -225,9 +225,9 @@ public:
   SuperPointFeatureFrontEnd()
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
                         MatcherType::BF, SelectorType::NN, true, 2.0f, 1.0f, 4),
-        model_name_prefix_("superpoint_pretrained"), trt_precision_(TRT_FP32),
-        input_height_(120), input_width_(392), input_size_(120 * 392),
-        output_det_size_(output_det_channel_ * 49 * 15),
+        model_name_prefix_("superpoint_pretrained"), model_batch_size_(2),
+        trt_precision_(TRT_FP32), input_height_(120), input_width_(392),
+        input_size_(120 * 392), output_det_size_(output_det_channel_ * 49 * 15),
         output_desc_size_(output_desc_channel_ * 49 * 15), output_width_(49),
         output_height_(15), conf_thresh_(0.015), dist_thresh_(4),
         num_threads_(12), border_remove_(4) {
@@ -240,24 +240,30 @@ public:
   SuperPointFeatureFrontEnd(
       const MatcherType matcher_type, const SelectorType selector_type,
       const bool cross_check, const std::string model_name_prefix,
-      const TensorRtPrecision trt_precision, const int input_height,
-      const int input_width, const float conf_thresh, const int dist_thresh,
-      const int num_threads, const int border_remove,
+      const int model_batch_size, const TensorRtPrecision trt_precision,
+      const int input_height, const int input_width, const float conf_thresh,
+      const int dist_thresh, const int num_threads, const int border_remove,
       const float stereo_threshold, const float min_disparity,
       const int refinement_degree)
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
                         matcher_type, selector_type, cross_check,
                         stereo_threshold, min_disparity, refinement_degree),
-        model_name_prefix_(model_name_prefix), trt_precision_(TRT_FP32),
+        model_name_prefix_(model_name_prefix),
+        model_batch_size_(model_batch_size), trt_precision_(TRT_FP32),
         input_height_(input_height), input_width_(input_width),
-        input_size_(input_height * input_width),
-        output_det_size_(output_det_channel_ * input_height * input_width / 64),
-        output_desc_size_(output_desc_channel_ * input_height * input_width /
-                          64),
+        input_size_(model_batch_size * input_height * input_width),
+        output_det_size_(model_batch_size * output_det_channel_ * input_height *
+                         input_width / 64),
+        output_desc_size_(model_batch_size * output_desc_channel_ *
+                          input_height * input_width / 64),
         output_width_(input_width / 8), output_height_(input_height / 8),
         conf_thresh_(conf_thresh), dist_thresh_(dist_thresh),
         num_threads_(num_threads), border_remove_(border_remove) {
     assert(input_height % 8 == 0 && input_width % 8 == 0);
+
+    std::cout << "input_size_ = " << input_size_ << std::endl;
+    std::cout << "output_det_size_ = " << output_det_size_ << std::endl;
+    std::cout << "output_desc_size_ = " << output_desc_size_ << std::endl;
 
     initMatcher();
     initPointers();
@@ -277,13 +283,15 @@ public:
   void loadTrtEngine();
 
   void preprocessImage(cv::Mat &img, cv::Mat &projection_matrix);
-  void runNeuralNetwork(const cv::Mat &img);
-  void postprocessDetectionAndDescription(
-      std::vector<cv::KeyPoint> &keypoints_after_nms, cv::Mat &descriptors);
+  void runNeuralNetwork(const std::vector<cv::Mat> &imgs);
+  void
+  processOneHeatmap(const Eigen::Tensor<float, 3, Eigen::RowMajor> &heatmap,
+                    const int curr_batch);
+  void postprocessDetectionAndDescription();
   Eigen::VectorXf
-  bilinearInterpolationDesc(const Eigen::Tensor<float, 3, Eigen::RowMajor>
+  bilinearInterpolationDesc(const Eigen::Tensor<float, 4, Eigen::RowMajor>
                                 &output_desc_tensor_transposed,
-                            const int row, const int col);
+                            const int row, const int col, const int curr_batch);
   void debugOneBatchOutput();
   void addStereoImagePair(const cv::Mat &img_l, const cv::Mat &img_r,
                           const cv::Mat &projection_matrix_l,
@@ -294,6 +302,9 @@ public:
 
 private:
   const std::string model_name_prefix_;
+  // this param is only for comparing the running time now. For better
+  // performance, the higher the better.
+  const int model_batch_size_;
   const TensorRtPrecision trt_precision_;
 
   // total IO ports, 1 input, 2 final outputs
