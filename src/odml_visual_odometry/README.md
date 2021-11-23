@@ -51,11 +51,20 @@ About 66.3FPS in total
 
 # TODO 
 
-- Finish the data saving module
-- Separate running modes into monocular and stereo, and load different trt engines accordingly
+- Rewrite launch files to fit multimachine tests
+- Test FP16
+- Add acceleration anomaly detection
+- Add five point RANSAC screening
 - Test the code on Jetson Nano
     - Install OpenCV 4.5.1, ROS, Eigen
 - Test the performance on the whole KITTI dataset
+- Test memory optimization on Jetson
+- Add stats module
+- Add 2.5D reconstruction module
+- Test SuperGlue
+- Test adding IMU
+- Test Loop Closure
+- Test SuperVO
 
 # Troubleshooting
 

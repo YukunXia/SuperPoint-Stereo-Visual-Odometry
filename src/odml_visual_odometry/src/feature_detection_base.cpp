@@ -21,9 +21,14 @@ void FeatureFrontEnd::initMatcher() {
     } else {
       ROS_ERROR("[initMatcher] Decscriptor is not implemented");
     }
-    matcher_ = cv::BFMatcher::create(norm_type, cross_check_);
+    // https://stackoverflow.com/a/35611756/9556578
+    // Quote:  The error is caused by configuring BFMatcher with crossCheck =
+    // True. For k > 1, set crossCheck = False (constructor default).
+    matcher_ = cv::BFMatcher::create(
+        norm_type, cross_check_ & (selector_type_ != SelectorType::KNN));
   } else if (matcher_type_ == MatcherType::FLANN) {
-    matcher_ = cv::DescriptorMatcher::create(cv::DescriptorMatcher::FLANNBASED);
+    matcher_ = cv::makePtr<cv::FlannBasedMatcher>(
+        cv::makePtr<cv::flann::KDTreeIndexParams>(2));
   }
 }
 
@@ -147,21 +152,55 @@ void FeatureFrontEnd::solveStereoOdometry(
   cv::Mat r_vec = r_vec_pred.clone();
   // cv::Mat::zeros(3, 1, CV_64FC1);
   cv::Mat t_vec = t_vec_pred.clone();
+  // cv::UsacParams usac_params = cv::UsacParams();
+  // usac_params.confidence = 0.999;
+  // usac_params.maxIterations = 500;
+  // usac_params.threshold = 2.0;
+  /* https://github.com/opencv/opencv/blob/17234f82d025e3bbfbf611089637e5aa2038e7b8/modules/calib3d/src/solvepnp.cpp#L201-L214
+    UsacParams::UsacParams()
+    {
+        confidence = 0.99;
+        isParallel = false;
+        loIterations = 5;
+        loMethod = LocalOptimMethod::LOCAL_OPTIM_INNER_LO;
+        loSampleSize = 14;
+        maxIterations = 5000;
+        neighborsSearch = NeighborSearchMethod::NEIGH_GRID;
+        randomGeneratorState = 0;
+        sampler = SamplingMethod::SAMPLING_UNIFORM;
+        score = ScoreMethod::SCORE_METHOD_MSAC;
+        threshold = 1.5;
+    }
+  */
   bool pnp_result = cv::solvePnPRansac(
       curr_left_points_3d, keypoints_prev_left, intrinsics_l, distortion, r_vec,
-      t_vec, false, 500, 2.0, 0.999, inliers, cv::SOLVEPNP_EPNP);
+      t_vec, true, 500, 2.0, 0.999, inliers, cv::SOLVEPNP_EPNP);
+  // bool pnp_result =
+  //     cv::solvePnPRansac(curr_left_points_3d, keypoints_prev_left,
+  //     intrinsics_l,
+  //                        distortion, r_vec, t_vec, inliers, usac_params);
+  // std::cout << "curr_left_points_3d = \n" << curr_left_points_3d << std::endl;
+  // std::cout << "keypoints_prev_left = \n" << keypoints_prev_left << std::endl;
+  // std::cout << "intrinsics_l = \n" << intrinsics_l << std::endl;
 
   if (!pnp_result) {
     ROS_ERROR(
         "solvePnPRansac failed! Identity transformation will be applied.");
-    ROS_INFO("keypoints_curr_left size = %lu", keypoints_curr_left.size());
-    ROS_INFO("inliers rows = %d, cols = %d", inliers.rows, inliers.cols);
     r_vec = r_vec_pred.clone();
     t_vec = t_vec_pred.clone();
   } else {
+    // ROS_INFO("solvePnPRansac succeeded! pred t_vec is (%.4f, %.4f, %.4f), now "
+    //          "t_vec is (%.4f, %.4f, %.4f)",
+    //          t_vec_pred.at<double>(0, 0), t_vec_pred.at<double>(1, 0),
+    //          t_vec_pred.at<double>(2, 0), t_vec.at<double>(0, 0),
+    //          t_vec.at<double>(1, 0), t_vec.at<double>(2, 0));
+    // TODO: update this later after refinement
     r_vec_pred = r_vec.clone();
     t_vec_pred = t_vec.clone();
   }
+  // ROS_INFO("keypoints_curr_left size = %lu", keypoints_curr_left.size());
+  // ROS_INFO("inliers rows = %d, cols = %d", inliers.rows, inliers.cols);
+  // std::cout << inliers.rowRange(0, 10) << std::endl;
 
   // TODO: use inliers to refine PnP
   const Eigen::Vector3d axis_angle(
@@ -184,6 +223,11 @@ void FeatureFrontEnd::solveStereoOdometry(
     // triangulation of the current stereo images
     const int curr_valid_index = inliers.at<int>(i, 0);
 
+    // if (inliers.at<uchar>(i, 0) != 1)
+    //   continue;
+
+    // const int curr_valid_index = i;
+
     // project 3d point at curr frame to a 2d point at prev left frame
     ceres::CostFunction *cost_function_l = CostFunctor32::Create(
         curr_left_points_3d.at<cv::Vec3f>(curr_valid_index, 0),
@@ -192,7 +236,8 @@ void FeatureFrontEnd::solveStereoOdometry(
                              q_to_be_optmz.coeffs().data(),
                              t_to_be_optmz.data());
 
-    if (refinement_degree_ <= 1) continue;
+    if (refinement_degree_ <= 1)
+      continue;
 
     // if the mapping path from curr left to prev right is valid
     if (keypoints_prev_right.at(curr_valid_index).x >= 0.0f &&
@@ -207,7 +252,8 @@ void FeatureFrontEnd::solveStereoOdometry(
                                t_to_be_optmz.data());
     }
 
-    if (refinement_degree_ <= 2) continue;
+    if (refinement_degree_ <= 2)
+      continue;
 
     // Not necessarily optimal, but the current setting is that only after
     // this function is run once, will the following optimization factors been
@@ -234,7 +280,8 @@ void FeatureFrontEnd::solveStereoOdometry(
     assert(keypoints_curr_right.at(curr_valid_index).x >= 0.0f &&
            keypoints_curr_right.at(curr_valid_index).y >= 0.0f);
 
-    if (refinement_degree_ <= 3) continue;
+    if (refinement_degree_ <= 3)
+      continue;
 
     // project 3d point at curr frame to a 2d point at prev right frame
     ceres::CostFunction *cost_function_r_inverse = CostFunctor32::Create(

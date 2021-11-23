@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(odml_visual_odometry)
 
+# set(CMAKE_EXE_LINKER_FLAGS "-T ${CMAKE_SOURCE_DIR}/custom.lds ${CMAKE_EXE_LINKER_FLAGS}")
+
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++17 -O3 -march=native -fopenmp -DNDEBUG)
 
@@ -8,7 +10,10 @@ add_compile_options(-std=c++17 -O3 -march=native -fopenmp -DNDEBUG)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 
-find_package(OpenCV 4.5.1)
+set("OpenCV_DIR" "/usr/local/lib/cmake/opencv4/OpenCVConfig.cmake")
+find_package(OpenCV 4.5.4 REQUIRED PATHS "/usr/local/include/opencv4/")
+message("OpenCV_INCLUDE_DIRS: ${OpenCV_INCLUDE_DIRS}")
+message("OpenCV_LIBS: ${OpenCV_LIBS}")
 
 find_package(CUDA REQUIRED)
 message("-- CUDA version: ${CUDA_VERSION}")
