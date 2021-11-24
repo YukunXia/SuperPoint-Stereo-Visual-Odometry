@@ -88,8 +88,7 @@ void FeatureFrontEnd::solveStereoOdometry(
     const int matched_index_curr_left = cv_Dmatch.queryIdx;
 
     // fulfilled curr stereo matching, but failed lhs interframe matching
-    if (maps_of_indices[CURR_LEFT_PREV_LEFT].find(matched_index_curr_left) ==
-        maps_of_indices[CURR_LEFT_PREV_LEFT].end())
+    if (maps_of_indices[CURR_LEFT_PREV_LEFT].at(matched_index_curr_left) == -1)
       continue;
 
     const cv::Point2f &keypoint_curr_left =
@@ -110,8 +109,7 @@ void FeatureFrontEnd::solveStereoOdometry(
 
     // fulfilled curr stereo matching & lhs interframe matching, but failed prev
     // stereo matching
-    if (maps_of_indices[PREV_LEFT_PREV_RIGHT].find(matched_index_prev_left) ==
-        maps_of_indices[PREV_LEFT_PREV_RIGHT].end())
+    if (maps_of_indices[PREV_LEFT_PREV_RIGHT].at(matched_index_prev_left) == -1)
       continue;
 
     // from here, no filtering will be applied
@@ -119,9 +117,6 @@ void FeatureFrontEnd::solveStereoOdometry(
     keypoints_curr_right.push_back(keypoint_curr_right);
     // for visualization only. TODO: consider adding a flag here
     inliers_postmatching.push_back(matched_index_curr_left);
-
-    if (refinement_degree_ <= 2)
-      continue;
 
     keypoints_prev_left.push_back(keypoint_prev_left);
 
@@ -327,6 +322,7 @@ void FeatureFrontEnd::solveStereoOdometry(
 
   cam0_curr_T_cam0_prev = cam0_prev_T_cam0_curr.inverse();
 
+  // update data for the next time frame
   if (refinement_degree_ >= 3) {
     map_from_prev_left_matched_to_prev_valid_index =
         map_from_curr_left_matched_to_curr_valid_index;
@@ -334,6 +330,10 @@ void FeatureFrontEnd::solveStereoOdometry(
     // prev_left_points_3d = curr_left_points_3d.clone();
     prev_left_points_3d_inited = true;
   }
+
+  ++frame_count;
+  // TODO: handle int overflow [not urgent]
+  // frame_count = std::min(frame_count, 100);
 }
 
 // TODO: Add mask visualization (cautious for empty mask)
@@ -403,14 +403,6 @@ void FeatureFrontEnd::matchDescriptors(const MatchType match_type) {
     }
   }
 
-  std::vector<std::pair<int, int>> index_pairs;
-  std::transform(cv_Dmatches.begin(), cv_Dmatches.end(),
-                 std::back_inserter(index_pairs),
-                 [](const cv::DMatch &cv_Dmatch) -> std::pair<int, int> {
-                   // queryIdx: keypoints0; trainIdx: keypoints1
-                   return {cv_Dmatch.queryIdx, cv_Dmatch.trainIdx};
-                 });
-
   if (match_type == MatchType::CURR_LEFT_CURR_RIGHT) {
     // before updating the CURR_LEFT_CURR_RIGHT, assign PREV_LEFT_PREV_RIGHT to
     // be the unupdated CURR_LEFT_CURR_RIGHT, which is the previous time frame's
@@ -418,13 +410,19 @@ void FeatureFrontEnd::matchDescriptors(const MatchType match_type) {
     maps_of_indices[MatchType::PREV_LEFT_PREV_RIGHT] =
         maps_of_indices[MatchType::CURR_LEFT_CURR_RIGHT];
   }
-  maps_of_indices[match_type] =
-      std::unordered_map<int, int>(index_pairs.begin(), index_pairs.end());
+
+  std::vector<int> &maps_of_indices_curr_matching =
+      maps_of_indices.at(match_type);
+  maps_of_indices_curr_matching.clear();
+  maps_of_indices_curr_matching.resize(keypoints0.size(), -1);
+  for (cv::DMatch &cv_Dmatch : cv_Dmatches) {
+    const int matched_index_0 = cv_Dmatch.queryIdx;
+    const int matched_index_1 = cv_Dmatch.trainIdx;
+    maps_of_indices_curr_matching.at(matched_index_0) = matched_index_1;
+  }
 
   ROS_INFO("%lu matches for %s", cv_Dmatches.size(),
            MatchType_str[match_type].c_str());
-  ++frame_count;
-  // frame_count = std::min(frame_count, 100);
 }
 
 cv::Mat FeatureFrontEnd::visualizeInliers(const ImagePosition image_position) {
@@ -451,10 +449,7 @@ cv::Mat FeatureFrontEnd::visualizeInliers(const ImagePosition image_position) {
   for (const auto &cv_Dmatch : cv_DMatches_list[CURR_LEFT_CURR_RIGHT]) {
     const int matched_index_curr_left = cv_Dmatch.queryIdx;
     const int matched_index_prev_left =
-        (maps_of_indices[CURR_LEFT_PREV_LEFT].find(matched_index_curr_left) !=
-         maps_of_indices[CURR_LEFT_PREV_LEFT].end())
-            ? maps_of_indices[CURR_LEFT_PREV_LEFT].at(matched_index_curr_left)
-            : -1;
+        maps_of_indices[CURR_LEFT_PREV_LEFT].at(matched_index_curr_left);
 
     cv::Scalar color;
     int line_width;

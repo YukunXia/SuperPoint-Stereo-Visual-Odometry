@@ -16,7 +16,7 @@
         <param name="conf_thresh" type="double" value="0.015" />
         <param name="dist_thresh" type="int" value="4" />
         <!-- adapt num_threads after check num of cores from `lscpu`-->
-        <param name="num_threads" type="int" value="6" />
+        <param name="num_threads" type="int" value="4" />
         <param name="border_remove" type="int" value="4" />
         <param name="stereo_threshold" type="double" value="2.0" />
         <param name="refinement_degree" type="int" value="4" />

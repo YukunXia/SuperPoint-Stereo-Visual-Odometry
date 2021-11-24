@@ -148,7 +148,8 @@ protected:
   cv::Mat t_vec_pred = cv::Mat::zeros(3, 1, CV_64FC1);
   int frame_count = 0;
 
-  std::array<std::unordered_map<int, int>, MATCH_TYPE_NUM> maps_of_indices;
+  // std::array<std::unordered_map<int, int>, MATCH_TYPE_NUM> maps_of_indices;
+  std::array<std::vector<int>, MATCH_TYPE_NUM> maps_of_indices;
 
   // will not be used if refinement_degree <= 2
   bool prev_left_points_3d_inited = false;
