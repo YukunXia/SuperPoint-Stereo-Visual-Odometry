@@ -51,10 +51,12 @@ About 66.3FPS in total
 
 # TODO 
 
-- Rewrite launch files to fit multimachine tests
+- Replace unordered_map to vector<int>
 - Test FP16
+- Test SIFT
 - Add acceleration anomaly detection
 - Add five point RANSAC screening
+- Rewrite launch files to fit multimachine tests
 - Test the code on Jetson Nano
     - Install OpenCV 4.5.1, ROS, Eigen
 - Test the performance on the whole KITTI dataset

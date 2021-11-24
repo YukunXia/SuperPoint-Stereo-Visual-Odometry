@@ -45,6 +45,9 @@ void FeatureFrontEnd::clearLagecyData() {
     map_of_indices.clear();
   }
   prev_left_points_3d_inited = false;
+
+  inliers_postmatching.clear();
+  inliers_pnp.clear();
 }
 
 // entering into this function means there's at least 2 time frames
@@ -57,14 +60,17 @@ void FeatureFrontEnd::solveStereoOdometry(
       cv_DMatches_list[CURR_LEFT_PREV_LEFT];
 
   // extract common feature points in both matches
+  const size_t num_curr_stereo = cv_Dmatches_curr_stereo.size();
   std::vector<cv::Point2f> keypoints_curr_left;
-  keypoints_curr_left.reserve(cv_Dmatches_curr_stereo.size());
+  keypoints_curr_left.reserve(num_curr_stereo);
   std::vector<cv::Point2f> keypoints_curr_right;
-  keypoints_curr_right.reserve(cv_Dmatches_curr_stereo.size());
+  keypoints_curr_right.reserve(num_curr_stereo);
   std::vector<cv::Point2f> keypoints_prev_left;
-  keypoints_prev_left.reserve(cv_Dmatches_curr_stereo.size());
+  keypoints_prev_left.reserve(num_curr_stereo);
   std::vector<cv::Point2f> keypoints_prev_right;
-  keypoints_prev_right.reserve(cv_Dmatches_curr_stereo.size());
+  keypoints_prev_right.reserve(num_curr_stereo);
+  inliers_postmatching.clear();
+  inliers_postmatching.reserve(num_curr_stereo);
 
   if (refinement_degree_ >= 3) {
     // `map_from_matched_to_valid_index` will be used in the next time frame
@@ -80,6 +86,7 @@ void FeatureFrontEnd::solveStereoOdometry(
   for (const auto &cv_Dmatch : cv_Dmatches_curr_stereo) {
     const int matched_index_curr_left = cv_Dmatch.queryIdx;
 
+    // fulfilled curr stereo matching, but failed lhs interframe matching
     if (maps_of_indices[CURR_LEFT_PREV_LEFT].find(matched_index_curr_left) ==
         maps_of_indices[CURR_LEFT_PREV_LEFT].end())
       continue;
@@ -103,6 +110,12 @@ void FeatureFrontEnd::solveStereoOdometry(
 
     keypoints_curr_left.push_back(keypoint_curr_left);
     keypoints_curr_right.push_back(keypoint_curr_right);
+    // for visualization only. TODO: consider adding a flag here
+    inliers_postmatching.push_back(matched_index_curr_left);
+
+    if (refinement_degree_ <= 2)
+      continue;
+
     keypoints_prev_left.push_back(keypoint_prev_left);
 
     if (maps_of_indices[PREV_LEFT_PREV_RIGHT].find(matched_index_prev_left) !=
@@ -144,52 +157,39 @@ void FeatureFrontEnd::solveStereoOdometry(
   cv::convertPointsFromHomogeneous(curr_left_points_4d, curr_left_points_3d);
 
   // PnP
-  const cv::Mat intrinsics_l = projection_matrix_l_.colRange(0, 3);
-  // 32SC1 num_pointsx1 -> each at<int>(row,0) is an int index
-  cv::Mat inliers;
+  // TODO: handle exception when num of points is no enough
+  const cv::Matx33d intrinsics_l(projection_matrix_l_.at<double>(0, 0),
+                                 projection_matrix_l_.at<double>(0, 1),
+                                 projection_matrix_l_.at<double>(0, 2),
+                                 projection_matrix_l_.at<double>(1, 0),
+                                 projection_matrix_l_.at<double>(1, 1),
+                                 projection_matrix_l_.at<double>(1, 2),
+                                 projection_matrix_l_.at<double>(2, 0),
+                                 projection_matrix_l_.at<double>(2, 1),
+                                 projection_matrix_l_.at<double>(2, 2));
+
+  // // 32SC1 num_pointsx1 -> each at<int>(row,0) is an int index
   const cv::Mat distortion = cv::Mat::zeros(4, 1, CV_64FC1);
   // cv::Mat::zeros(3, 1, CV_64FC1);
   cv::Mat r_vec = r_vec_pred.clone();
   // cv::Mat::zeros(3, 1, CV_64FC1);
   cv::Mat t_vec = t_vec_pred.clone();
-  // cv::UsacParams usac_params = cv::UsacParams();
-  // usac_params.confidence = 0.999;
-  // usac_params.maxIterations = 500;
-  // usac_params.threshold = 2.0;
-  /* https://github.com/opencv/opencv/blob/17234f82d025e3bbfbf611089637e5aa2038e7b8/modules/calib3d/src/solvepnp.cpp#L201-L214
-    UsacParams::UsacParams()
-    {
-        confidence = 0.99;
-        isParallel = false;
-        loIterations = 5;
-        loMethod = LocalOptimMethod::LOCAL_OPTIM_INNER_LO;
-        loSampleSize = 14;
-        maxIterations = 5000;
-        neighborsSearch = NeighborSearchMethod::NEIGH_GRID;
-        randomGeneratorState = 0;
-        sampler = SamplingMethod::SAMPLING_UNIFORM;
-        score = ScoreMethod::SCORE_METHOD_MSAC;
-        threshold = 1.5;
-    }
-  */
+  inliers_pnp.clear();
+  inliers_pnp.reserve(curr_left_points_3d.rows);
   bool pnp_result = cv::solvePnPRansac(
       curr_left_points_3d, keypoints_prev_left, intrinsics_l, distortion, r_vec,
-      t_vec, true, 500, 2.0, 0.999, inliers, cv::SOLVEPNP_EPNP);
-  // bool pnp_result =
-  //     cv::solvePnPRansac(curr_left_points_3d, keypoints_prev_left,
-  //     intrinsics_l,
-  //                        distortion, r_vec, t_vec, inliers, usac_params);
-  // std::cout << "curr_left_points_3d = \n" << curr_left_points_3d << std::endl;
-  // std::cout << "keypoints_prev_left = \n" << keypoints_prev_left << std::endl;
-  // std::cout << "intrinsics_l = \n" << intrinsics_l << std::endl;
+      t_vec, true, 500, 2.0, 0.999, inliers_pnp, cv::USAC_ACCURATE);
 
   if (!pnp_result) {
     ROS_ERROR(
         "solvePnPRansac failed! Identity transformation will be applied.");
     r_vec = r_vec_pred.clone();
     t_vec = t_vec_pred.clone();
+    ROS_INFO("keypoints_curr_left size = %lu", keypoints_curr_left.size());
+    ROS_INFO("inlier size = %lu", inliers_pnp.size());
   } else {
-    // ROS_INFO("solvePnPRansac succeeded! pred t_vec is (%.4f, %.4f, %.4f), now "
+    // ROS_INFO("solvePnPRansac succeeded! pred t_vec is (%.4f, %.4f, %.4f), now
+    // "
     //          "t_vec is (%.4f, %.4f, %.4f)",
     //          t_vec_pred.at<double>(0, 0), t_vec_pred.at<double>(1, 0),
     //          t_vec_pred.at<double>(2, 0), t_vec.at<double>(0, 0),
@@ -198,11 +198,7 @@ void FeatureFrontEnd::solveStereoOdometry(
     r_vec_pred = r_vec.clone();
     t_vec_pred = t_vec.clone();
   }
-  // ROS_INFO("keypoints_curr_left size = %lu", keypoints_curr_left.size());
-  // ROS_INFO("inliers rows = %d, cols = %d", inliers.rows, inliers.cols);
-  // std::cout << inliers.rowRange(0, 10) << std::endl;
 
-  // TODO: use inliers to refine PnP
   const Eigen::Vector3d axis_angle(
       r_vec.at<double>(0, 0), r_vec.at<double>(1, 0), r_vec.at<double>(2, 0));
   const double angle = axis_angle.norm();
@@ -211,22 +207,18 @@ void FeatureFrontEnd::solveStereoOdometry(
   Eigen::Vector3d t_to_be_optmz(t_vec.at<double>(0, 0), t_vec.at<double>(1, 0),
                                 t_vec.at<double>(2, 0));
 
+  // use inliers to refine PnP
+  // TODO: handle exception when num of points is no enough
   // unit: pixel
   ceres::LossFunction *loss_function = new ceres::HuberLoss(1.0);
   ceres::Problem::Options problem_options;
   ceres::Problem problem(problem_options);
 
   // project 3d point at curr frame to a 2d point at prev left & right frame
-  for (int i = 0; i < inliers.rows; ++i) {
-    // this index works for keypoints_curr_left, keypoints_curr_right,
+  for (const int curr_valid_index : inliers_pnp) {
+    // `curr_valid_index` works for keypoints_curr_left, keypoints_curr_right,
     // keypoints_prev_left and keypoint_prev_right in context of the
     // triangulation of the current stereo images
-    const int curr_valid_index = inliers.at<int>(i, 0);
-
-    // if (inliers.at<uchar>(i, 0) != 1)
-    //   continue;
-
-    // const int curr_valid_index = i;
 
     // project 3d point at curr frame to a 2d point at prev left frame
     ceres::CostFunction *cost_function_l = CostFunctor32::Create(
@@ -296,7 +288,7 @@ void FeatureFrontEnd::solveStereoOdometry(
                               new ceres::EigenQuaternionParameterization);
 
   ceres::Solver::Options solver_options;
-  solver_options.max_num_iterations = 20;
+  solver_options.max_num_iterations = 40;
   solver_options.linear_solver_type = ceres::DENSE_QR;
   ceres::Solver::Summary summary;
   ceres::Solve(solver_options, &problem, &summary);
@@ -304,6 +296,9 @@ void FeatureFrontEnd::solveStereoOdometry(
       summary.termination_type != ceres::TerminationType::CONVERGENCE) {
     ROS_ERROR("summary.IsSolutionUsable() == false or NOT CONVERGENT");
     ROS_ERROR("Ceres solver report: \n%s", summary.FullReport().c_str());
+    q_to_be_optmz = Eigen::Quaterniond(Eigen::AngleAxisd(angle, axis));
+    t_to_be_optmz = Eigen::Vector3d(
+        t_vec.at<double>(0, 0), t_vec.at<double>(1, 0), t_vec.at<double>(2, 0));
   }
 
   // output
@@ -412,4 +407,61 @@ void FeatureFrontEnd::matchDescriptors(const MatchType match_type) {
 
   ROS_INFO("%lu matches for %s", cv_Dmatches.size(),
            MatchType_str[match_type].c_str());
+}
+
+cv::Mat FeatureFrontEnd::visualizeInliers(const ImagePosition image_position) {
+  if (image_position != CURR_LEFT)
+    ROS_ERROR("inlier visualization for %s is not implemented yet",
+              ImagePosition_str.at(image_position).c_str());
+
+  cv::Mat inlier_visualization_img = images_dq.end()[image_position];
+  cv::cvtColor(inlier_visualization_img, inlier_visualization_img,
+               cv::COLOR_GRAY2BGR);
+
+  // matched indices
+  const std::unordered_set<int> inliers_postmatching_set(
+      inliers_postmatching.begin(), inliers_postmatching.end());
+  // matched indices
+  std::unordered_set<int> inliers_pnp_set;
+  for (const int valid_inlier : inliers_pnp) {
+    inliers_pnp_set.insert(inliers_postmatching.at(valid_inlier));
+  }
+
+  const cv::Scalar color_pnp_set = cv::Scalar(0, 255, 0);
+  const cv::Scalar color_postmatching = cv::Scalar(255, 0, 255);
+  const cv::Scalar color_others = cv::Scalar(0, 0, 255);
+  for (const auto &cv_Dmatch : cv_DMatches_list[CURR_LEFT_CURR_RIGHT]) {
+    const int matched_index_curr_left = cv_Dmatch.queryIdx;
+    const int matched_index_prev_left =
+        (maps_of_indices[CURR_LEFT_PREV_LEFT].find(matched_index_curr_left) !=
+         maps_of_indices[CURR_LEFT_PREV_LEFT].end())
+            ? maps_of_indices[CURR_LEFT_PREV_LEFT].at(matched_index_curr_left)
+            : -1;
+
+    cv::Scalar color;
+    int line_width;
+    if (inliers_pnp_set.find(matched_index_curr_left) !=
+        inliers_pnp_set.end()) {
+      color = color_pnp_set;
+      line_width = 2;
+    } else if (inliers_postmatching_set.find(matched_index_curr_left) !=
+               inliers_postmatching_set.end()) {
+      color = color_postmatching;
+      line_width = 1;
+    } else {
+      color = color_others;
+      line_width = 1;
+    }
+
+    if (matched_index_prev_left != -1)
+      cv::line(inlier_visualization_img,
+               keypoints_dq.end()[CURR_LEFT][matched_index_curr_left].pt,
+               keypoints_dq.end()[PREV_LEFT][matched_index_prev_left].pt, color,
+               line_width);
+    cv::circle(inlier_visualization_img,
+               keypoints_dq.end()[CURR_LEFT][matched_index_curr_left].pt, 3,
+               color, -1);
+  }
+
+  return inlier_visualization_img;
 }

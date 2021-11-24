@@ -70,6 +70,11 @@ enum ImagePosition {
   CURR_RIGHT = -1,
   NUM_IMAGE_POSITIONS = 4
 };
+const std::map<int, std::string> ImagePosition_str = {
+    {PREV_LEFT, "PREV_LEFT"},
+    {PREV_RIGHT, "PREV_RIGHT"},
+    {CURR_LEFT, "CURR_LEFT"},
+    {CURR_RIGHT, "CURR_RIGHT"}};
 
 enum MatchType {
   CURR_LEFT_CURR_RIGHT = 0,
@@ -108,6 +113,7 @@ public:
   void matchDescriptors(const MatchType match_type);
   void solveStereoOdometry(tf2::Transform &cam0_curr_T_cam0_prev);
   cv::Mat visualizeMatches(const MatchType match_type);
+  cv::Mat visualizeInliers(const ImagePosition image_position);
 
   std::deque<cv::Mat> images_dq;
   std::deque<std::vector<cv::KeyPoint>> keypoints_dq;
@@ -148,6 +154,12 @@ protected:
   std::vector<int> map_from_prev_left_matched_to_prev_valid_index;
   std::vector<int> map_from_curr_valid_to_prev_left_matched_index;
   std::vector<int> map_from_curr_left_matched_to_curr_valid_index;
+  
+  // for visualization only. matched indices at curr left. also maps from curr valid
+  // indices to curr matched indices.
+  std::vector<int> inliers_postmatching;
+  // for both visualization and refinement. valid indices at curr frame
+  std::vector<int> inliers_pnp;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////
