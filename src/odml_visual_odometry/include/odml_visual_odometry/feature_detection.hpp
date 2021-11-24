@@ -134,6 +134,10 @@ protected:
   const float min_disparity_;
   // nums of nonlinear least square optmz factor per time frame
   const int refinement_degree_;
+  // Cautious: fit the following number into use case 
+  const static double TIME_INTERVAL = 0.1;
+  const static double MAX_ACCELERATION = 8.0;
+  const static int IGNORE_FRAME_COUNT = 10;
 
   cv::Ptr<cv::DescriptorMatcher> matcher_;
 
@@ -142,6 +146,7 @@ protected:
 
   cv::Mat r_vec_pred = cv::Mat::zeros(3, 1, CV_64FC1);
   cv::Mat t_vec_pred = cv::Mat::zeros(3, 1, CV_64FC1);
+  int frame_count = 0;
 
   std::array<std::unordered_map<int, int>, MATCH_TYPE_NUM> maps_of_indices;
 
@@ -154,12 +159,14 @@ protected:
   std::vector<int> map_from_prev_left_matched_to_prev_valid_index;
   std::vector<int> map_from_curr_valid_to_prev_left_matched_index;
   std::vector<int> map_from_curr_left_matched_to_curr_valid_index;
-  
+
   // for visualization only. matched indices at curr left. also maps from curr valid
   // indices to curr matched indices.
   std::vector<int> inliers_postmatching;
   // for both visualization and refinement. valid indices at curr frame
   std::vector<int> inliers_pnp;
+  // // in inliers_postmatching, but not in inliers_pnp. In matched indices, left cam
+  // std::unordered_set<int> matched_outliers_spurious;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////

@@ -54,19 +54,19 @@ About 66.3FPS in total
 - Replace unordered_map to vector<int>
 - Test FP16
 - Test SIFT
-- Add acceleration anomaly detection
 - Add five point RANSAC screening
 - Rewrite launch files to fit multimachine tests
 - Test the code on Jetson Nano
     - Install OpenCV 4.5.1, ROS, Eigen
-- Test the performance on the whole KITTI dataset
-- Test memory optimization on Jetson
 - Add stats module
+- Test memory optimization on Jetson
+- Test the performance on the whole KITTI dataset
 - Add 2.5D reconstruction module
 - Test SuperGlue
 - Test adding IMU
 - Test Loop Closure
 - Test SuperVO
+- Refine prediction and acceleration anomaly detection
 
 # Troubleshooting
 
