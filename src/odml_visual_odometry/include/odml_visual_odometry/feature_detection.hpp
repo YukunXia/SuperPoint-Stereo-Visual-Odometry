@@ -135,9 +135,9 @@ protected:
   // nums of nonlinear least square optmz factor per time frame
   const int refinement_degree_;
   // Cautious: fit the following number into use case 
-  const static double TIME_INTERVAL = 0.1;
-  const static double MAX_ACCELERATION = 8.0;
-  const static int IGNORE_FRAME_COUNT = 10;
+  constexpr static double TIME_INTERVAL = 0.1;
+  constexpr static double MAX_ACCELERATION = 8.0;
+  constexpr static int IGNORE_FRAME_COUNT = 10;
 
   cv::Ptr<cv::DescriptorMatcher> matcher_;
 
@@ -165,8 +165,6 @@ protected:
   std::vector<int> inliers_postmatching;
   // for both visualization and refinement. valid indices at curr frame
   std::vector<int> inliers_pnp;
-  // // in inliers_postmatching, but not in inliers_pnp. In matched indices, left cam
-  // std::unordered_set<int> matched_outliers_spurious;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////

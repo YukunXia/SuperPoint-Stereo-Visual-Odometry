@@ -108,11 +108,11 @@ void FeatureFrontEnd::solveStereoOdometry(
     const cv::Point2f &keypoint_prev_left =
         keypoints_dq.end()[PREV_LEFT][matched_index_prev_left].pt;
 
-    // // the matched prev left was marked as spurious
-    // if (matched_outliers_spurious.find(matched_index_prev_left) !=
-    //     matched_outliers_spurious.end()) {
-    //   continue;
-    // }
+    // fulfilled curr stereo matching & lhs interframe matching, but failed prev
+    // stereo matching
+    if (maps_of_indices[PREV_LEFT_PREV_RIGHT].find(matched_index_prev_left) ==
+        maps_of_indices[PREV_LEFT_PREV_RIGHT].end())
+      continue;
 
     // from here, no filtering will be applied
     keypoints_curr_left.push_back(keypoint_curr_left);
@@ -125,17 +125,11 @@ void FeatureFrontEnd::solveStereoOdometry(
 
     keypoints_prev_left.push_back(keypoint_prev_left);
 
-    if (maps_of_indices[PREV_LEFT_PREV_RIGHT].find(matched_index_prev_left) !=
-        maps_of_indices[PREV_LEFT_PREV_RIGHT].end()) {
-      const int index_prev_right =
-          maps_of_indices[PREV_LEFT_PREV_RIGHT].at(matched_index_prev_left);
-      const cv::Point2f keypoint_prev_right =
-          keypoints_dq.end()[PREV_RIGHT][index_prev_right].pt;
-      keypoints_prev_right.push_back(keypoint_prev_right);
-    } else {
-      // invalid results as placeholders
-      keypoints_prev_right.emplace_back(-1.0f, -1.0f);
-    }
+    const int index_prev_right =
+        maps_of_indices[PREV_LEFT_PREV_RIGHT].at(matched_index_prev_left);
+    const cv::Point2f keypoint_prev_right =
+        keypoints_dq.end()[PREV_RIGHT][index_prev_right].pt;
+    keypoints_prev_right.push_back(keypoint_prev_right);
 
     if (refinement_degree_ >= 3) {
       assert(keypoints_curr_left.size() > 0);
@@ -220,19 +214,6 @@ void FeatureFrontEnd::solveStereoOdometry(
     do_optmz = true;
   }
 
-  // // update spurious outlier
-  // matched_outliers_spurious.clear();
-  // for (int i = 0, j = 0; i < prev_left_points_3d.rows && j <
-  // inliers_pnp.size();
-  //      ++i) {
-  //   assert(i <= inliers_pnp.at(j));
-  //   if (i < inliers_pnp.at(j)) {
-  //     matched_outliers_spurious.insert(inliers_postmatching.at(i));
-  //   } else {
-  //     ++j;
-  //   }
-  // }
-
   const Eigen::Vector3d axis_angle(
       r_vec.at<double>(0, 0), r_vec.at<double>(1, 0), r_vec.at<double>(2, 0));
   const double angle = axis_angle.norm();
@@ -267,18 +248,14 @@ void FeatureFrontEnd::solveStereoOdometry(
       if (refinement_degree_ <= 1)
         continue;
 
-      // if the mapping path from curr left to prev right is valid
-      if (keypoints_prev_right.at(curr_valid_index).x >= 0.0f &&
-          keypoints_prev_right.at(curr_valid_index).y >= 0.0f) {
-        // project 3d point at curr frame to a 2d point at prev right frame
-        ceres::CostFunction *cost_function_r = CostFunctor32::Create(
-            curr_left_points_3d.at<cv::Vec3f>(curr_valid_index, 0),
-            keypoints_prev_right.at(curr_valid_index), projection_matrix_r_,
-            false);
-        problem.AddResidualBlock(cost_function_r, loss_function,
-                                 q_to_be_optmz.coeffs().data(),
-                                 t_to_be_optmz.data());
-      }
+      // project 3d point at curr frame to a 2d point at prev right frame
+      ceres::CostFunction *cost_function_r = CostFunctor32::Create(
+          curr_left_points_3d.at<cv::Vec3f>(curr_valid_index, 0),
+          keypoints_prev_right.at(curr_valid_index), projection_matrix_r_,
+          false);
+      problem.AddResidualBlock(cost_function_r, loss_function,
+                               q_to_be_optmz.coeffs().data(),
+                               t_to_be_optmz.data());
 
       if (refinement_degree_ <= 2)
         continue;
