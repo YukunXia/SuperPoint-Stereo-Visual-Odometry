@@ -51,11 +51,17 @@ About 66.3FPS in total
 
 # TODO 
 
-- Finish the data saving module
-- Separate running modes into monocular and stereo, and load different trt engines accordingly
-- Test the code on Jetson Nano
-    - Install OpenCV 4.5.1, ROS, Eigen
+- Test SIFT
+- Add five point RANSAC screening
+- Test optimizing cache locality and memory allocation on Jetson Nano
+- Add stats module
 - Test the performance on the whole KITTI dataset
+- Add 2.5D reconstruction module
+- Test SuperGlue
+- Test adding IMU
+- Test Loop Closure
+- Test SuperVO
+- Refine prediction and acceleration anomaly detection
 
 # Troubleshooting
 
@@ -74,3 +80,11 @@ if(NOT "include;/usr/local/include/opencv4 " STREQUAL " ")
   set(cv_bridge_INCLUDE_DIRS "")
   set(_include_dirs "include;/usr/local/include/opencv4")
 ```
+
+# Deployment with TensorRT
+
+Sample command:
+
+`trtexec --onnx=superpoint_pretrained2.onnx --explicitBatch --minShapes=input:1x1x360x1176 --optShapes=input:1x1x360x1176 --maxShapes=input:1x1x360x1176 --workspace=3072 --saveEngine=superpoint_pretrained_360_1176_FP32.engine`
+
+`trtexec --onnx=superpoint_pretrained2.onnx --explicitBatch --minShapes=input:1x1x360x1176 --optShapes=input:1x1x360x1176 --maxShapes=input:1x1x360x1176 --workspace=3072 --saveEngine=superpoint_pretrained_360_1176_FP16.engine --fp16`

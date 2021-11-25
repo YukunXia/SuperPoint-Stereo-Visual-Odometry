@@ -4,7 +4,7 @@
         <param name="detector_type" type="string" value="ORB" />
         <param name="descriptor_type" type="string" value="ORB" />
         <param name="matcher_type" type="string" value="BF" />
-        <param name="selector_type" type="string" value="NN" />
+        <param name="selector_type" type="string" value="KNN" />
         <param name="stereo_threshold" type="double" value="2.0" />
         <param name="min_disparity" type="double" value="2.0" />
         <param name="refinement_degree" type="int" value="4" />

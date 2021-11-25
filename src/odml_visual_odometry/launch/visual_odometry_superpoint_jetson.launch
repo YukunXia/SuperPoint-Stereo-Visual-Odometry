@@ -4,7 +4,7 @@
         <param name="detector_type" type="string" value="SuperPoint" />
         <param name="descriptor_type" type="string" value="SuperPoint" />
         <param name="matcher_type" type="string" value="BF" />
-        <param name="selector_type" type="string" value="NN" />
+        <param name="selector_type" type="string" value="KNN" />
         <param name="image_height" type="int" value="360" />
         <!-- <param name="image_height" type="int" value="240" /> -->
         <!-- <param name="image_height" type="int" value="120" /> -->
@@ -13,11 +13,12 @@
         <!-- <param name="image_width" type="int" value="392" /> -->
         <param name="model_name_prefix" type="string" value="superpoint_pretrained" />
         <param name="model_batch_size" type="int" value="2" />
-        <param name="trt_precision" type="string" value="FP32" />
+        <param name="machine_name" type="string" value="jetson" />
+        <param name="trt_precision" type="string" value="FP16" />
         <param name="conf_thresh" type="double" value="0.015" />
         <param name="dist_thresh" type="int" value="4" />
         <!-- adapt num_threads after check num of cores from `lscpu`-->
-        <param name="num_threads" type="int" value="6" />
+        <param name="num_threads" type="int" value="4" />
         <param name="border_remove" type="int" value="4" />
         <param name="stereo_threshold" type="double" value="2.0" />
         <param name="refinement_degree" type="int" value="4" />

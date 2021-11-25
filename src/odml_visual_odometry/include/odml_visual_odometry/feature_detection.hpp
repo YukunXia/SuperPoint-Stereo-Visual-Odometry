@@ -70,6 +70,11 @@ enum ImagePosition {
   CURR_RIGHT = -1,
   NUM_IMAGE_POSITIONS = 4
 };
+const std::map<int, std::string> ImagePosition_str = {
+    {PREV_LEFT, "PREV_LEFT"},
+    {PREV_RIGHT, "PREV_RIGHT"},
+    {CURR_LEFT, "CURR_LEFT"},
+    {CURR_RIGHT, "CURR_RIGHT"}};
 
 enum MatchType {
   CURR_LEFT_CURR_RIGHT = 0,
@@ -108,6 +113,7 @@ public:
   void matchDescriptors(const MatchType match_type);
   void solveStereoOdometry(tf2::Transform &cam0_curr_T_cam0_prev);
   cv::Mat visualizeMatches(const MatchType match_type);
+  cv::Mat visualizeInliers(const ImagePosition image_position);
 
   std::deque<cv::Mat> images_dq;
   std::deque<std::vector<cv::KeyPoint>> keypoints_dq;
@@ -128,6 +134,10 @@ protected:
   const float min_disparity_;
   // nums of nonlinear least square optmz factor per time frame
   const int refinement_degree_;
+  // Cautious: fit the following number into use case
+  constexpr static double TIME_INTERVAL = 0.1;
+  constexpr static double MAX_ACCELERATION = 8.0;
+  constexpr static int IGNORE_FRAME_COUNT = 10;
 
   cv::Ptr<cv::DescriptorMatcher> matcher_;
 
@@ -136,8 +146,10 @@ protected:
 
   cv::Mat r_vec_pred = cv::Mat::zeros(3, 1, CV_64FC1);
   cv::Mat t_vec_pred = cv::Mat::zeros(3, 1, CV_64FC1);
+  int frame_count = 0;
 
-  std::array<std::unordered_map<int, int>, MATCH_TYPE_NUM> maps_of_indices;
+  // std::array<std::unordered_map<int, int>, MATCH_TYPE_NUM> maps_of_indices;
+  std::array<std::vector<int>, MATCH_TYPE_NUM> maps_of_indices;
 
   // will not be used if refinement_degree <= 2
   bool prev_left_points_3d_inited = false;
@@ -148,6 +160,12 @@ protected:
   std::vector<int> map_from_prev_left_matched_to_prev_valid_index;
   std::vector<int> map_from_curr_valid_to_prev_left_matched_index;
   std::vector<int> map_from_curr_left_matched_to_curr_valid_index;
+
+  // for visualization only. matched indices at curr left. also maps from curr
+  // valid indices to curr matched indices.
+  std::vector<int> inliers_postmatching;
+  // for both visualization and refinement. valid indices at curr frame
+  std::vector<int> inliers_pnp;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -226,11 +244,12 @@ public:
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
                         MatcherType::BF, SelectorType::NN, true, 2.0f, 1.0f, 4),
         model_name_prefix_("superpoint_pretrained"), model_batch_size_(2),
-        trt_precision_(TRT_FP32), input_height_(120), input_width_(392),
-        input_size_(120 * 392), output_det_size_(output_det_channel_ * 49 * 15),
-        output_desc_size_(output_desc_channel_ * 49 * 15), output_width_(49),
-        output_height_(15), conf_thresh_(0.015), dist_thresh_(4),
-        num_threads_(12), border_remove_(4) {
+        machine_name_("laptop"), trt_precision_(TRT_FP32), input_height_(120),
+        input_width_(392), input_size_(2 * 120 * 392),
+        output_det_size_(2 * output_det_channel_ * 49 * 15),
+        output_desc_size_(2 * output_desc_channel_ * 49 * 15),
+        output_width_(49), output_height_(15), conf_thresh_(0.015),
+        dist_thresh_(4), num_threads_(12), border_remove_(4) {
 
     initMatcher();
     initPointers();
@@ -240,17 +259,19 @@ public:
   SuperPointFeatureFrontEnd(
       const MatcherType matcher_type, const SelectorType selector_type,
       const bool cross_check, const std::string model_name_prefix,
-      const int model_batch_size, const TensorRtPrecision trt_precision,
-      const int input_height, const int input_width, const float conf_thresh,
-      const int dist_thresh, const int num_threads, const int border_remove,
+      const int model_batch_size, const std::string machine_name,
+      const TensorRtPrecision trt_precision, const int input_height,
+      const int input_width, const float conf_thresh, const int dist_thresh,
+      const int num_threads, const int border_remove,
       const float stereo_threshold, const float min_disparity,
       const int refinement_degree)
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
                         matcher_type, selector_type, cross_check,
                         stereo_threshold, min_disparity, refinement_degree),
         model_name_prefix_(model_name_prefix),
-        model_batch_size_(model_batch_size), trt_precision_(TRT_FP32),
-        input_height_(input_height), input_width_(input_width),
+        model_batch_size_(model_batch_size), machine_name_(machine_name),
+        trt_precision_(trt_precision), input_height_(input_height),
+        input_width_(input_width),
         input_size_(model_batch_size * input_height * input_width),
         output_det_size_(model_batch_size * output_det_channel_ * input_height *
                          input_width / 64),
@@ -303,8 +324,9 @@ public:
 private:
   const std::string model_name_prefix_;
   // this param is only for comparing the running time now. For better
-  // performance, the higher the better.
+  // performance, the higher the better. Uppper bound is the num of cameras.
   const int model_batch_size_;
+  const std::string machine_name_;
   const TensorRtPrecision trt_precision_;
 
   // total IO ports, 1 input, 2 final outputs

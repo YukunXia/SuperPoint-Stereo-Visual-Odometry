@@ -20,3 +20,4 @@ devel_isolated/
 .catkin_workspace
 
 src/odml_data_processing/kitti_results/
+.vscode/

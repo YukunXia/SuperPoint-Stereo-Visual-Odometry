@@ -4,7 +4,7 @@
         <param name="detector_type" type="string" value="SuperPoint" />
         <param name="descriptor_type" type="string" value="SuperPoint" />
         <param name="matcher_type" type="string" value="BF" />
-        <param name="selector_type" type="string" value="NN" />
+        <param name="selector_type" type="string" value="KNN" />
         <param name="image_height" type="int" value="360" />
         <!-- <param name="image_height" type="int" value="240" /> -->
         <!-- <param name="image_height" type="int" value="120" /> -->
@@ -13,6 +13,7 @@
         <!-- <param name="image_width" type="int" value="392" /> -->
         <param name="model_name_prefix" type="string" value="superpoint_pretrained" />
         <param name="model_batch_size" type="int" value="2" />
+        <param name="machine_name" type="string" value="laptop" />
         <param name="trt_precision" type="string" value="FP32" />
         <param name="conf_thresh" type="double" value="0.015" />
         <param name="dist_thresh" type="int" value="4" />

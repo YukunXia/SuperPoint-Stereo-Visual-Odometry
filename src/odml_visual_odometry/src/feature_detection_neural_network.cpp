@@ -24,8 +24,9 @@
 void SuperPointFeatureFrontEnd::loadTrtEngine() {
   const std::string model_name_full =
       ros::package::getPath("odml_visual_odometry") + "/models/" +
-      model_name_prefix_ + "_" + std::to_string(model_batch_size_) + "_" +
-      std::to_string(input_height_) + "_" + std::to_string(input_width_) + "_" +
+      machine_name_ + "/" + model_name_prefix_ + "_" +
+      std::to_string(model_batch_size_) + "_" + std::to_string(input_height_) +
+      "_" + std::to_string(input_width_) + "_" +
       trt_precision_enum2string.at(trt_precision_) + ".engine";
 
   std::ifstream engine_file(model_name_full, std::ios::binary);

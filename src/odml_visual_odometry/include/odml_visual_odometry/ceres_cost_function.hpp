@@ -57,7 +57,7 @@ struct CostFunctor32 { // 32 means 3d - 2d observation pair
     return true;
   }
 
-  static ceres::CostFunction *Create(const cv::Vec3d &point_3d,
+  static ceres::CostFunction *Create(const cv::Vec3f &point_3d,
                                      const cv::Point2f &point_2d,
                                      const cv::Mat &projection,
                                      const bool inverse_transformation) {

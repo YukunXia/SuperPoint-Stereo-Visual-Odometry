@@ -55,9 +55,8 @@ bool first_frame = true;
 tf2::Transform world_T_base_curr = tf2::Transform::getIdentity();
 
 std::shared_ptr<FeatureFrontEnd> feature_front_end_ptr;
-
-cv_bridge::CvImage matches_viz_cvbridge;
 std::array<image_transport::Publisher, MATCH_TYPE_NUM> pub_matches_img_list;
+image_transport::Publisher pub_inliers;
 
 tf2::Transform cam0_curr_T_cam0_prev_last_valid = tf2::Transform::getIdentity();
 
@@ -187,13 +186,13 @@ void stereoCallback(
     feature_front_end_ptr->matchDescriptors(match_type);
     // classic_feature_front_end_ptr->solve5PointsRANSAC(match_type,
     // img_l_intrinsics, cam0_curr_T_cam0_prev);
+
     // For visualization
     std_msgs::Header header;
     header.stamp = ros::Time::now();
-    const cv::Mat match_image =
-        feature_front_end_ptr->visualizeMatches(match_type);
-    matches_viz_cvbridge = cv_bridge::CvImage(
-        header, sensor_msgs::image_encodings::RGB8, match_image);
+    const cv_bridge::CvImage matches_viz_cvbridge =
+        cv_bridge::CvImage(header, sensor_msgs::image_encodings::RGB8,
+                           feature_front_end_ptr->visualizeMatches(match_type));
     // TODO: try compressed image
     pub_matches_img_list[match_type].publish(matches_viz_cvbridge.toImageMsg());
   }
@@ -215,6 +214,15 @@ void stereoCallback(
           1000.0f);
 
   publishOdometry(cam0_curr_T_cam0_prev);
+
+  // For inliers visualization
+  std_msgs::Header header;
+  header.stamp = ros::Time::now();
+  const cv_bridge::CvImage inliers_viz_cvbridge =
+      cv_bridge::CvImage(header, sensor_msgs::image_encodings::RGB8,
+                         feature_front_end_ptr->visualizeInliers(CURR_LEFT));
+  // TODO: try compressed image
+  pub_inliers.publish(inliers_viz_cvbridge.toImageMsg());
 }
 
 // restart the vo and clean legacy data
@@ -279,6 +287,7 @@ int main(int argc, char **argv) {
       std::string selector_type;
       std::string model_name_prefix;
       int model_batch_size;
+      std::string machine_name;
       std::string trt_precision;
       int image_height;
       int image_width;
@@ -293,6 +302,7 @@ int main(int argc, char **argv) {
       nh_private.getParam("selector_type", selector_type);
       nh_private.getParam("model_name_prefix", model_name_prefix);
       nh_private.getParam("model_batch_size", model_batch_size);
+      nh_private.getParam("machine_name", machine_name);
       nh_private.getParam("trt_precision", trt_precision);
       nh_private.getParam("image_height", image_height);
       nh_private.getParam("image_width", image_width);
@@ -312,7 +322,7 @@ int main(int argc, char **argv) {
           matcher_name_to_type.at(matcher_type),
           selector_name_to_type.at(selector_type),
           true, // cross check. only used in KNN mode
-          model_name_prefix, model_batch_size,
+          model_name_prefix, model_batch_size, machine_name,
           trt_precision_string2enum.at(trt_precision), image_height,
           image_width, conf_thresh, dist_thresh, num_threads, border_remove,
           stereo_threshold, min_disparity, refinement_degree);
@@ -348,10 +358,11 @@ int main(int argc, char **argv) {
       "/kitti_loader_action_server/goal", 1000, dataLodaerGoalCallback);
 
   image_transport::ImageTransport it(nh);
-  for (int i = 0; i < MATCH_TYPE_NUM; ++i) {
+  for (int i = 0; i < 2; ++i) {
     pub_matches_img_list[i] = it.advertise(
         "/odml_visual_odometry/matches_visualization" + MatchType_str[i], 10);
   }
+  pub_inliers = it.advertise("/odml_visual_odometry/inliers_visualization", 10);
 
   ros::Rate loop_rate(100);
   while (ros::ok()) {
