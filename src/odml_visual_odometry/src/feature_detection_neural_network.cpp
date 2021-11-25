@@ -33,6 +33,8 @@ void SuperPointFeatureFrontEnd::loadTrtEngine() {
   if (!engine_file.good()) {
     ROS_ERROR("no such engine file: %s", model_name_full.c_str());
     return;
+  } else {
+    ROS_INFO("engine file (%s) is available", model_name_full.c_str());
   }
 
   engine_file.seekg(0, engine_file.end);

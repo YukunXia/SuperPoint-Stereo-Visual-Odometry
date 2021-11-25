@@ -267,7 +267,7 @@ public:
                         matcher_type, selector_type, cross_check,
                         stereo_threshold, min_disparity, refinement_degree),
         model_name_prefix_(model_name_prefix), machine_name_(machine_name),
-        trt_precision_(TRT_FP32), input_height_(input_height),
+        trt_precision_(trt_precision), input_height_(input_height),
         input_width_(input_width), input_size_(input_height * input_width),
         output_det_size_(output_det_channel_ * input_height * input_width / 64),
         output_desc_size_(output_desc_channel_ * input_height * input_width /
