@@ -134,7 +134,7 @@ protected:
   const float min_disparity_;
   // nums of nonlinear least square optmz factor per time frame
   const int refinement_degree_;
-  // Cautious: fit the following number into use case 
+  // Cautious: fit the following number into use case
   constexpr static double TIME_INTERVAL = 0.1;
   constexpr static double MAX_ACCELERATION = 8.0;
   constexpr static int IGNORE_FRAME_COUNT = 10;
@@ -161,8 +161,8 @@ protected:
   std::vector<int> map_from_curr_valid_to_prev_left_matched_index;
   std::vector<int> map_from_curr_left_matched_to_curr_valid_index;
 
-  // for visualization only. matched indices at curr left. also maps from curr valid
-  // indices to curr matched indices.
+  // for visualization only. matched indices at curr left. also maps from curr
+  // valid indices to curr matched indices.
   std::vector<int> inliers_postmatching;
   // for both visualization and refinement. valid indices at curr frame
   std::vector<int> inliers_pnp;
@@ -243,9 +243,9 @@ public:
   SuperPointFeatureFrontEnd()
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
                         MatcherType::BF, SelectorType::NN, true, 2.0f, 1.0f, 4),
-        model_name_prefix_("superpoint_pretrained"), trt_precision_(TRT_FP32),
-        input_height_(120), input_width_(392), input_size_(120 * 392),
-        output_det_size_(output_det_channel_ * 49 * 15),
+        model_name_prefix_("superpoint_pretrained"), machine_name_("laptop"),
+        trt_precision_(TRT_FP32), input_height_(120), input_width_(392),
+        input_size_(120 * 392), output_det_size_(output_det_channel_ * 49 * 15),
         output_desc_size_(output_desc_channel_ * 49 * 15), output_width_(49),
         output_height_(15), conf_thresh_(0.015), dist_thresh_(4),
         num_threads_(12), border_remove_(4) {
@@ -258,17 +258,17 @@ public:
   SuperPointFeatureFrontEnd(
       const MatcherType matcher_type, const SelectorType selector_type,
       const bool cross_check, const std::string model_name_prefix,
-      const TensorRtPrecision trt_precision, const int input_height,
-      const int input_width, const float conf_thresh, const int dist_thresh,
-      const int num_threads, const int border_remove,
+      const std::string machine_name, const TensorRtPrecision trt_precision,
+      const int input_height, const int input_width, const float conf_thresh,
+      const int dist_thresh, const int num_threads, const int border_remove,
       const float stereo_threshold, const float min_disparity,
       const int refinement_degree)
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
                         matcher_type, selector_type, cross_check,
                         stereo_threshold, min_disparity, refinement_degree),
-        model_name_prefix_(model_name_prefix), trt_precision_(TRT_FP32),
-        input_height_(input_height), input_width_(input_width),
-        input_size_(input_height * input_width),
+        model_name_prefix_(model_name_prefix), machine_name_(machine_name),
+        trt_precision_(TRT_FP32), input_height_(input_height),
+        input_width_(input_width), input_size_(input_height * input_width),
         output_det_size_(output_det_channel_ * input_height * input_width / 64),
         output_desc_size_(output_desc_channel_ * input_height * input_width /
                           64),
@@ -312,6 +312,7 @@ public:
 
 private:
   const std::string model_name_prefix_;
+  const std::string machine_name_;
   const TensorRtPrecision trt_precision_;
 
   // total IO ports, 1 input, 2 final outputs

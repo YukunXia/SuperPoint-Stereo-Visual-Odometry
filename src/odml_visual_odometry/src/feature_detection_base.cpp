@@ -154,15 +154,7 @@ void FeatureFrontEnd::solveStereoOdometry(
 
   // PnP
   // TODO: handle exception when num of points is no enough
-  const cv::Matx33d intrinsics_l(projection_matrix_l_.at<double>(0, 0),
-                                 projection_matrix_l_.at<double>(0, 1),
-                                 projection_matrix_l_.at<double>(0, 2),
-                                 projection_matrix_l_.at<double>(1, 0),
-                                 projection_matrix_l_.at<double>(1, 1),
-                                 projection_matrix_l_.at<double>(1, 2),
-                                 projection_matrix_l_.at<double>(2, 0),
-                                 projection_matrix_l_.at<double>(2, 1),
-                                 projection_matrix_l_.at<double>(2, 2));
+  const cv::Matx33d intrinsics_l = projection_matrix_l_.colRange(0, 3).clone();
 
   // // 32SC1 num_pointsx1 -> each at<int>(row,0) is an int index
   const cv::Mat distortion = cv::Mat::zeros(4, 1, CV_64FC1);
@@ -217,7 +209,7 @@ void FeatureFrontEnd::solveStereoOdometry(
   Eigen::Vector3d t_to_be_optmz(t_vec.at<double>(0, 0), t_vec.at<double>(1, 0),
                                 t_vec.at<double>(2, 0));
 
-  if (do_optmz) {
+  if (do_optmz && refinement_degree_ > 0) {
     // use inliers to refine PnP
     // TODO: handle exception when num of points is no enough
     // unit: pixel

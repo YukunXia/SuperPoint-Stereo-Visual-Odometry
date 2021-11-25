@@ -24,8 +24,8 @@
 void SuperPointFeatureFrontEnd::loadTrtEngine() {
   const std::string model_name_full =
       ros::package::getPath("odml_visual_odometry") + "/models/" +
-      model_name_prefix_ + "_" + std::to_string(input_height_) + "_" +
-      std::to_string(input_width_) + "_" +
+      machine_name_ + "/" + model_name_prefix_ + "_" +
+      std::to_string(input_height_) + "_" + std::to_string(input_width_) + "_" +
       trt_precision_enum2string.at(trt_precision_) + ".engine";
 
   std::ifstream engine_file(model_name_full, std::ios::binary);
@@ -419,7 +419,6 @@ void SuperPointFeatureFrontEnd::addStereoImagePair(
          (1 + (img_l.type() >> CV_CN_SHIFT)) == 1);
   assert((img_r.type() & CV_MAT_DEPTH_MASK) == CV_32F &&
          (1 + (img_r.type() >> CV_CN_SHIFT)) == 1);
-
 
   const auto start = std::chrono::system_clock::now();
 

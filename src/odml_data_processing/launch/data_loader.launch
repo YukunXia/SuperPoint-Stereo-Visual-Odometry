@@ -1,0 +1,8 @@
+<launch>
+  <node pkg="odml_data_processing" type="data_processing_node" name="data_processing_node" output="screen">
+        <param name="rosbag_rate" type="double" value="1.0" />
+  </node>
+
+  <node type="rviz" name="rviz" pkg="rviz" args="-d $(find odml_data_processing)/rviz/main.rviz" />
+
+</launch>

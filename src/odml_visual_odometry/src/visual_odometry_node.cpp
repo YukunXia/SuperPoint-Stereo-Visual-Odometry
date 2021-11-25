@@ -286,6 +286,7 @@ int main(int argc, char **argv) {
       std::string matcher_type;
       std::string selector_type;
       std::string model_name_prefix;
+      std::string machine_name;
       std::string trt_precision;
       int image_height;
       int image_width;
@@ -299,6 +300,7 @@ int main(int argc, char **argv) {
       nh_private.getParam("matcher_type", matcher_type);
       nh_private.getParam("selector_type", selector_type);
       nh_private.getParam("model_name_prefix", model_name_prefix);
+      nh_private.getParam("machine_name", machine_name);
       nh_private.getParam("trt_precision", trt_precision);
       nh_private.getParam("image_height", image_height);
       nh_private.getParam("image_width", image_width);
@@ -318,7 +320,7 @@ int main(int argc, char **argv) {
           matcher_name_to_type.at(matcher_type),
           selector_name_to_type.at(selector_type),
           true, // cross check. only used in KNN mode
-          model_name_prefix, trt_precision_string2enum.at(trt_precision),
+          model_name_prefix, machine_name, trt_precision_string2enum.at(trt_precision),
           image_height, image_width, conf_thresh, dist_thresh, num_threads,
           border_remove, stereo_threshold, min_disparity, refinement_degree);
     } else {

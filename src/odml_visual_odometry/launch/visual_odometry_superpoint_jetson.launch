@@ -12,6 +12,7 @@
         <!-- <param name="image_width" type="int" value="784" /> -->
         <!-- <param name="image_width" type="int" value="392" /> -->
         <param name="model_name_prefix" type="string" value="superpoint_pretrained" />
+        <param name="machine_name" type="string" value="jetson" />
         <param name="trt_precision" type="string" value="FP32" />
         <param name="conf_thresh" type="double" value="0.015" />
         <param name="dist_thresh" type="int" value="4" />
