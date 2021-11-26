@@ -156,8 +156,8 @@ void stereoCallback(
       cv_bridge::toCvCopy(left_image_msg, sensor_msgs::image_encodings::MONO8);
   cv_ptr_r =
       cv_bridge::toCvCopy(right_image_msg, sensor_msgs::image_encodings::MONO8);
-  const cv::Mat img_l = cv_ptr_l->image;
-  const cv::Mat img_r = cv_ptr_r->image;
+  cv::Mat img_l = cv_ptr_l->image;
+  cv::Mat img_r = cv_ptr_r->image;
 
   // TODO: place assertion here
   const cv::Mat img_l_intrinsics = cameraInfoToKMatrix(left_camera_info_msg);
@@ -199,7 +199,7 @@ void stereoCallback(
 
   const auto mid = std::chrono::system_clock::now();
   ROS_INFO(
-      "matching of 1 image takes %.4f ms",
+      "matching of image(s) takes %.4f ms",
       (float)std::chrono::duration_cast<std::chrono::microseconds>(mid - start)
               .count() /
           1000.0f);

@@ -187,19 +187,6 @@ target_link_libraries(visual_odometry_node
   feature_detection
 )
 
-
-add_executable(test_superpoint src/test_superpoint.cpp)
-add_dependencies(
-  test_superpoint 
-  ${${PROJECT_NAME}_EXPORTED_TARGETS} 
-  ${odml_data_processing_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS}
-)
-target_link_libraries(test_superpoint
-  ${catkin_LIBRARIES} 
-  ${OpenCV_LIBS}
-  feature_detection
-)
-
 #############
 ## Install ##
 #############

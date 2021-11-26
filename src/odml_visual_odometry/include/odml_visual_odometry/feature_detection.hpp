@@ -107,7 +107,7 @@ public:
         min_disparity_(min_disparity), refinement_degree_(refinement_degree) {}
   void initMatcher();
   void clearLagecyData();
-  virtual void addStereoImagePair(const cv::Mat &img_l, const cv::Mat &img_r,
+  virtual void addStereoImagePair(cv::Mat &img_l, cv::Mat &img_r,
                                   const cv::Mat &projection_matrix_l,
                                   const cv::Mat &projection_matrix_r) = 0;
   void matchDescriptors(const MatchType match_type);
@@ -200,7 +200,7 @@ public:
   void initDetector();
   void initDescriptor();
 
-  void addStereoImagePair(const cv::Mat &img_l, const cv::Mat &img_r,
+  void addStereoImagePair(cv::Mat &img_l, cv::Mat &img_r,
                           const cv::Mat &projection_matrix_l,
                           const cv::Mat &projection_matrix_r);
 
@@ -303,8 +303,9 @@ public:
   }
   void loadTrtEngine();
 
-  void preprocessImage(cv::Mat &img, cv::Mat &projection_matrix);
-  void runNeuralNetwork(const std::vector<cv::Mat> &imgs);
+  void preprocessImage(cv::Mat &img, cv::Mat &projection_matrix,
+                       const int curr_batch);
+  void runNeuralNetwork();
   void
   processOneHeatmap(const Eigen::Tensor<float, 3, Eigen::RowMajor> &heatmap,
                     const int curr_batch);
@@ -314,7 +315,7 @@ public:
                                 &output_desc_tensor_transposed,
                             const int row, const int col, const int curr_batch);
   void debugOneBatchOutput();
-  void addStereoImagePair(const cv::Mat &img_l, const cv::Mat &img_r,
+  void addStereoImagePair(cv::Mat &img_l, cv::Mat &img_r,
                           const cv::Mat &projection_matrix_l,
                           const cv::Mat &projection_matrix_r);
 
@@ -363,6 +364,7 @@ private:
   // std::vector<void *> buffers_ = std::vector<void *>(BUFFER_SIZE);
   std::array<void *, BUFFER_SIZE> buffers_;
   std::unique_ptr<float[]> input_data_ = nullptr;
+  cv::Mat img_input;
   std::unique_ptr<float[]> output_det_data_ = nullptr;
   std::unique_ptr<float[]> output_desc_data_ = nullptr;
   std::unique_ptr<char[]> trt_model_stream_ = nullptr;

@@ -79,8 +79,8 @@ void ClassicFeatureFrontEnd::initDescriptor() {
 }
 
 void ClassicFeatureFrontEnd::addStereoImagePair(
-    const cv::Mat &img_l, const cv::Mat &img_r,
-    const cv::Mat &projection_matrix_l, const cv::Mat &projection_matrix_r) {
+    cv::Mat &img_l, cv::Mat &img_r, const cv::Mat &projection_matrix_l,
+    const cv::Mat &projection_matrix_r) {
   if (img_l.rows != img_r.rows || img_l.cols != img_l.cols) {
     ROS_ERROR("input images shape doesn't match! img_l's shape = (%d, %d), "
               "while img_r's shape = (%d, %d)",
