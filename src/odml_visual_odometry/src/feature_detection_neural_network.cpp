@@ -152,21 +152,19 @@ void SuperPointFeatureFrontEnd::preprocessImage(cv::Mat &img,
   // > input_image = input_image.astype('float')/255.0
   img.convertTo(img, CV_32FC1, 1.0f / 255.0f);
 
+  // hand over data to input data
+  // in this branch (master), only one gray image will be fed into NN. No need
+  // to consider transposing HWC to CHW
+  cv::Mat img_fit =
+      cv::Mat(input_height_, input_width_, CV_32F, input_data_.get());
+  img.copyTo(img_fit);  
+
   const float dst_size_over_src_size =
       static_cast<float>(input_width_) / static_cast<float>(img_cols);
   projection_matrix.rowRange(0, 2) *= dst_size_over_src_size;
 }
 
-void SuperPointFeatureFrontEnd::runNeuralNetwork(const cv::Mat &img) {
-  int i = 0;
-  for (int row = 0; row < input_height_; ++row) {
-    for (int col = 0; col < input_width_; ++col) {
-      input_data_.get()[i] = img.at<float>(row, col);
-      ++i;
-    }
-  }
-  assert(i == input_size_);
-
+void SuperPointFeatureFrontEnd::runNeuralNetwork() {
   const auto start = std::chrono::system_clock::now();
 
   CUDA_CHECK(cudaMemcpyAsync(buffers_[0], input_data_.get(),
@@ -409,8 +407,8 @@ void SuperPointFeatureFrontEnd::debugOneBatchOutput() {
 }
 
 void SuperPointFeatureFrontEnd::addStereoImagePair(
-    const cv::Mat &img_l, const cv::Mat &img_r,
-    const cv::Mat &projection_matrix_l, const cv::Mat &projection_matrix_r) {
+    cv::Mat &img_l, cv::Mat &img_r, const cv::Mat &projection_matrix_l,
+    const cv::Mat &projection_matrix_r) {
   // Input value type should be float. In the future, it's easy to enable double
   // mode.
   // Reference for type assertion
@@ -424,27 +422,19 @@ void SuperPointFeatureFrontEnd::addStereoImagePair(
 
   const auto start = std::chrono::system_clock::now();
 
-  cv::Mat img_l_fit = img_l.clone();
-  cv::Mat img_r_fit = img_r.clone();
-
   projection_matrix_l_ = projection_matrix_l.clone();
   projection_matrix_r_ = projection_matrix_r.clone();
 
-  preprocessImage(img_l_fit, projection_matrix_l_);
-  preprocessImage(img_r_fit, projection_matrix_r_);
-  assert(img_l_fit.rows == input_height_ && img_l_fit.cols == input_width_);
-  assert(img_r_fit.rows == input_height_ && img_r_fit.cols == input_width_);
-
-  assert(input_data_ != nullptr);
-
-  runNeuralNetwork(img_l_fit);
+  preprocessImage(img_l, projection_matrix_l_);
+  runNeuralNetwork();
   std::vector<cv::KeyPoint> keypoints_after_nms_l;
   cv::Mat descriptors_l;
   postprocessDetectionAndDescription(keypoints_after_nms_l, descriptors_l);
   keypoints_dq.push_back(keypoints_after_nms_l);
   descriptors_dq.push_back(descriptors_l);
 
-  runNeuralNetwork(img_r_fit);
+  preprocessImage(img_r, projection_matrix_r_);
+  runNeuralNetwork();
   std::vector<cv::KeyPoint> keypoints_after_nms_r;
   cv::Mat descriptors_r;
   postprocessDetectionAndDescription(keypoints_after_nms_r, descriptors_r);

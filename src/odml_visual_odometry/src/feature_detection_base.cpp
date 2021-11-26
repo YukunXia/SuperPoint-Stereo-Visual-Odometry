@@ -138,6 +138,7 @@ void FeatureFrontEnd::solveStereoOdometry(
   }
 
   // triangulation
+  // TODO: handle exception when num of keypoints_curr_left is no enough
   cv::Mat curr_left_points_4d;
   cv::triangulatePoints(projection_matrix_l_, projection_matrix_r_,
                         keypoints_curr_left, keypoints_curr_right,
