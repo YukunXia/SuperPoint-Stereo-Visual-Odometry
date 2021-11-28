@@ -98,8 +98,9 @@ void ClassicFeatureFrontEnd::addStereoImagePair(
 
   keypoints_dq.push_back(detectKeypoints(img_l));
   keypoints_dq.push_back(detectKeypoints(img_r));
-  ROS_INFO("%lu, %lu keypoints for img_l and img_r",
-           keypoints_dq.end()[-2].size(), keypoints_dq.end()[-1].size());
+  if (verbose_)
+    ROS_INFO("%lu, %lu keypoints for img_l and img_r",
+             keypoints_dq.end()[-2].size(), keypoints_dq.end()[-1].size());
 
   descriptors_dq.push_back(describeKeypoints(keypoints_dq.rbegin()[1], img_l));
   descriptors_dq.push_back(describeKeypoints(keypoints_dq.rbegin()[0], img_r));
@@ -113,10 +114,12 @@ void ClassicFeatureFrontEnd::addStereoImagePair(
   assert(keypoints_dq.size() <= NUM_IMAGE_POSITIONS);
   assert(descriptors_dq.size() <= NUM_IMAGE_POSITIONS);
 
-  const auto end = std::chrono::system_clock::now();
-  ROS_INFO(
-      "(pre, mid, post)processing detection of 1 image takes %.4f ms",
-      (float)std::chrono::duration_cast<std::chrono::microseconds>(end - start)
-              .count() /
-          1000.0f);
+  if (verbose_) {
+    const auto end = std::chrono::system_clock::now();
+    ROS_INFO("(pre, mid, post)processing detection of 1 image takes %.4f ms",
+             (float)std::chrono::duration_cast<std::chrono::microseconds>(end -
+                                                                          start)
+                     .count() /
+                 1000.0f);
+  }
 }

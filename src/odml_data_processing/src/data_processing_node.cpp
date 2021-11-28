@@ -19,6 +19,7 @@ namespace fs = std::experimental::filesystem;
 #include <odml_data_processing/kitti_data_loaderResult.h>
 
 // parameters for rosbag playing
+int pre_waiting_time;
 double rosbag_rate;
 int start_frame, end_frame;
 
@@ -114,13 +115,17 @@ void execute(
   // play the bag
   cmd = "rosbag play " + ros::package::getPath("odml_data_processing") +
         "/bags/" + kitti_eval_id_to_file_name[kiti_data_goal->kitti_eval_id] +
-        " -d 2 -r " + std::to_string(rosbag_rate);
+        " -d " + std::to_string(pre_waiting_time) + " -r " +
+        std::to_string(rosbag_rate);
 
   ROS_INFO("The command is %s", cmd.c_str());
   sys_ret = system(cmd.c_str());
+  // wait for visual odometry to finish
+  sleep(2);
 
   visual_odom_result_file.close();
 
+  // http://wiki.ros.org/actionlib_tutorials/Tutorials/SimpleActionServer%28ExecuteCallbackMethod%29
   kitti_data_loader_result.loading_finished = true;
   kitti_data_server->setSucceeded(kitti_data_loader_result);
 }
@@ -175,6 +180,8 @@ int main(int argc, char **argv) {
   ros::init(argc, argv, "data_processing_node");
 
   ros::NodeHandle nh_private = ros::NodeHandle("~");
+  nh_private.getParam("pre_waiting_time", pre_waiting_time);
+  pre_waiting_time = std::max(2, pre_waiting_time);
   nh_private.getParam("rosbag_rate", rosbag_rate);
 
   ros::NodeHandle nh;

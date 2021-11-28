@@ -100,11 +100,12 @@ public:
                   const MatcherType matcher_type,
                   const SelectorType selector_type, const bool cross_check,
                   const float stereo_threshold, const float min_disparity,
-                  const int refinement_degree)
+                  const int refinement_degree, const bool verbose)
       : detector_type_(detector_type), descriptor_type_(descriptor_type),
         matcher_type_(matcher_type), selector_type_(selector_type),
         cross_check_(cross_check), stereo_threshold_(stereo_threshold),
-        min_disparity_(min_disparity), refinement_degree_(refinement_degree) {}
+        min_disparity_(min_disparity), refinement_degree_(refinement_degree),
+        verbose_(verbose) {}
   void initMatcher();
   void clearLagecyData();
   virtual void addStereoImagePair(cv::Mat &img_l, cv::Mat &img_r,
@@ -122,6 +123,8 @@ public:
   // keypoints_valid_dq;
   std::deque<cv::Mat> descriptors_dq;
   std::array<std::vector<cv::DMatch>, MATCH_TYPE_NUM> cv_DMatches_list;
+
+  const bool verbose_;
 
 protected:
   const DetectorType detector_type_;
@@ -176,8 +179,8 @@ class ClassicFeatureFrontEnd : public FeatureFrontEnd {
 public:
   ClassicFeatureFrontEnd()
       : FeatureFrontEnd(DetectorType::ShiTomasi, DescriptorType::ORB,
-                        MatcherType::BF, SelectorType::NN, true, 2.0f, 1.0f,
-                        4) {
+                        MatcherType::BF, SelectorType::NN, true, 2.0f, 1.0f, 4,
+                        true) {
     initDetector();
     initDescriptor();
     initMatcher();
@@ -188,10 +191,11 @@ public:
                          const MatcherType matcher_type,
                          const SelectorType selector_type,
                          const bool cross_check, const float stereo_threshold,
-                         const float min_disparity, const int refinement_degree)
+                         const float min_disparity, const int refinement_degree,
+                         const bool verbose)
       : FeatureFrontEnd(detector_type, descriptor_type, matcher_type,
                         selector_type, cross_check, stereo_threshold,
-                        stereo_threshold, refinement_degree) {
+                        stereo_threshold, refinement_degree, verbose) {
     initDetector();
     initDescriptor();
     initMatcher();
@@ -242,7 +246,8 @@ class SuperPointFeatureFrontEnd : public FeatureFrontEnd {
 public:
   SuperPointFeatureFrontEnd()
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
-                        MatcherType::BF, SelectorType::NN, true, 2.0f, 1.0f, 4),
+                        MatcherType::BF, SelectorType::NN, true, 2.0f, 1.0f, 4,
+                        true),
         model_name_prefix_("superpoint_pretrained"), model_batch_size_(2),
         machine_name_("laptop"), trt_precision_(TRT_FP32), input_height_(120),
         input_width_(392), input_size_(2 * 120 * 392),
@@ -264,10 +269,11 @@ public:
       const int input_width, const float conf_thresh, const int dist_thresh,
       const int num_threads, const int border_remove,
       const float stereo_threshold, const float min_disparity,
-      const int refinement_degree)
+      const int refinement_degree, const bool verbose)
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
                         matcher_type, selector_type, cross_check,
-                        stereo_threshold, min_disparity, refinement_degree),
+                        stereo_threshold, min_disparity, refinement_degree,
+                        verbose),
         model_name_prefix_(model_name_prefix),
         model_batch_size_(model_batch_size), machine_name_(machine_name),
         trt_precision_(trt_precision), input_height_(input_height),

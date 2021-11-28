@@ -414,8 +414,9 @@ void FeatureFrontEnd::matchDescriptors(const MatchType match_type) {
     maps_of_indices_curr_matching.at(matched_index_0) = matched_index_1;
   }
 
-  ROS_INFO("%lu matches for %s", cv_Dmatches.size(),
-           MatchType_str[match_type].c_str());
+  if (verbose_)
+    ROS_INFO("%lu matches for %s", cv_Dmatches.size(),
+             MatchType_str[match_type].c_str());
 }
 
 cv::Mat FeatureFrontEnd::visualizeInliers(const ImagePosition image_position) {

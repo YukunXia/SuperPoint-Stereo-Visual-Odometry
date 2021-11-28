@@ -184,12 +184,14 @@ void SuperPointFeatureFrontEnd::runNeuralNetwork() {
                              cudaMemcpyDeviceToHost, stream_));
   cudaStreamSynchronize(stream_);
 
-  const auto end = std::chrono::system_clock::now();
-  ROS_INFO(
-      "processing 1 image by neural network takes %.4f ms",
-      (float)std::chrono::duration_cast<std::chrono::microseconds>(end - start)
-              .count() /
-          1000.0f);
+  if (verbose_) {
+    const auto end = std::chrono::system_clock::now();
+    ROS_INFO("processing 1 image by neural network takes %.4f ms",
+             (float)std::chrono::duration_cast<std::chrono::microseconds>(end -
+                                                                          start)
+                     .count() /
+                 1000.0f);
+  }
 }
 
 void SuperPointFeatureFrontEnd::processOneHeatmap(
@@ -464,7 +466,7 @@ void SuperPointFeatureFrontEnd::addStereoImagePair(
   assert((img_r.type() & CV_MAT_DEPTH_MASK) == CV_32F &&
          (1 + (img_r.type() >> CV_CN_SHIFT)) == 1);
 
-  const auto start = std::chrono::system_clock::now();
+  // const auto start = std::chrono::system_clock::now();
 
   projection_matrix_l_ = projection_matrix_l.clone();
   projection_matrix_r_ = projection_matrix_r.clone();
@@ -478,16 +480,18 @@ void SuperPointFeatureFrontEnd::addStereoImagePair(
     runNeuralNetwork();
     postprocessDetectionAndDescription();
 
-    ROS_INFO("%lu, %lu keypoints for img_l and img_r",
-             keypoints_dq.end()[-2].size(), keypoints_dq.end()[-1].size());
+    if (verbose_)
+      ROS_INFO("%lu, %lu keypoints for img_l and img_r",
+               keypoints_dq.end()[-2].size(), keypoints_dq.end()[-1].size());
   } else if (model_batch_size_ == 2) {
     preprocessImage(img_l, projection_matrix_l_, 0);
     preprocessImage(img_r, projection_matrix_r_, 1);
     runNeuralNetwork();
     postprocessDetectionAndDescription();
 
-    ROS_INFO("%lu, %lu keypoints for img_l and img_r",
-             keypoints_dq.end()[-2].size(), keypoints_dq.end()[-1].size());
+    if (verbose_)
+      ROS_INFO("%lu, %lu keypoints for img_l and img_r",
+               keypoints_dq.end()[-2].size(), keypoints_dq.end()[-1].size());
   } else {
     ROS_ERROR("Wrong batch size (%d)", model_batch_size_);
     return;
@@ -502,10 +506,11 @@ void SuperPointFeatureFrontEnd::addStereoImagePair(
   assert(keypoints_dq.size() <= 4);
   assert(descriptors_dq.size() <= 4);
 
-  const auto end = std::chrono::system_clock::now();
-  ROS_INFO(
-      "(pre, mid, post)processing detection of 1 image takes %.4f ms",
-      (float)std::chrono::duration_cast<std::chrono::microseconds>(end - start)
-              .count() /
-          1000.0f);
+  // const auto end = std::chrono::system_clock::now();
+  // ROS_INFO(
+  //     "(pre, mid, post)processing detection of 1 image takes %.4f ms",
+  //     (float)std::chrono::duration_cast<std::chrono::microseconds>(end -
+  //     start)
+  //             .count() /
+  //         1000.0f);
 }

@@ -185,6 +185,7 @@ target_link_libraries(visual_odometry_node
   ${catkin_LIBRARIES} 
   ${OpenCV_LIBS}
   feature_detection
+  stdc++fs
 )
 
 #############
