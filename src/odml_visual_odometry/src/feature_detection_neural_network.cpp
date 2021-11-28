@@ -375,7 +375,9 @@ Eigen::VectorXf SuperPointFeatureFrontEnd::bilinearInterpolationDesc(
   // coords
   // not exactly divided by 8. Eg. if input row = 360, desc row = 45, then r_359
   // in heatmap -> r_44 in desc
-  // This is the same as torch.nn.functional.grid_sample, with align_corner = True. It's by default eq to True in Pytorch 0.4, the version that the pretrained superpoint uses, while later changed to False by default.
+  // This is the same as torch.nn.functional.grid_sample, with align_corner =
+  // True. It's by default eq to True in Pytorch 0.4, the version that the
+  // pretrained superpoint uses, while later changed to False by default.
   const float row_by8 = static_cast<float>(row) /
                         static_cast<float>(input_height_ - 1) *
                         static_cast<float>(input_height_ / 8 - 1);

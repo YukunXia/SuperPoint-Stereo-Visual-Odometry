@@ -22,3 +22,4 @@ devel_isolated/
 src/odml_data_processing/kitti_results/
 .vscode/
 src/CMakeLists.txt
+*.engine
