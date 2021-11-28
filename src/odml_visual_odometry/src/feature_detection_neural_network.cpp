@@ -356,6 +356,7 @@ void SuperPointFeatureFrontEnd::postprocessDetectionAndDescription() {
       const int col = keypoint.pt.x;
       Eigen::VectorXf desc_interpolated =
           bilinearInterpolationDesc(output_desc_tensor_transposed, row, col, b);
+
       const cv::Mat desc_interpolated_cv_mat(1, output_desc_channel_, CV_32F,
                                              desc_interpolated.data());
       desc_interpolated_cv_mat.copyTo(descriptors.row(i));
@@ -372,10 +373,19 @@ Eigen::VectorXf SuperPointFeatureFrontEnd::bilinearInterpolationDesc(
     const int row, const int col, const int curr_batch) {
   // transforming row and col from heatmap coords into desc (downsampled/coarse)
   // coords
-  const float row_by8 =
-      static_cast<float>(row) / static_cast<float>(output_det_heatmap_factor_);
-  const float col_by8 =
-      static_cast<float>(col) / static_cast<float>(output_det_heatmap_factor_);
+  // not exactly divided by 8. Eg. if input row = 360, desc row = 45, then r_359
+  // in heatmap -> r_44 in desc
+  // This is the same as torch.nn.functional.grid_sample, with align_corner = True. It's by default eq to True in Pytorch 0.4, the version that the pretrained superpoint uses, while later changed to False by default.
+  const float row_by8 = static_cast<float>(row) /
+                        static_cast<float>(input_height_ - 1) *
+                        static_cast<float>(input_height_ / 8 - 1);
+  const float col_by8 = static_cast<float>(col) /
+                        static_cast<float>(input_width_ - 1) *
+                        static_cast<float>(input_width_ / 8 - 1);
+
+  // avoid overflow
+  assert(std::ceil(row_by8) <= input_height_ / 8 - 1);
+  assert(std::ceil(col_by8) <= input_width_ / 8 - 1);
 
   const int row_top_l = std::floor(row_by8);
   const int col_top_l = std::floor(col_by8);
