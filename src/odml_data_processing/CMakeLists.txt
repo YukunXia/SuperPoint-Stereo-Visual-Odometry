@@ -157,6 +157,13 @@ target_link_libraries(data_processing_node
   ${catkin_LIBRARIES} Eigen3::Eigen stdc++fs
 )
 
+
+add_executable(data_processing_eval_node src/data_processing_eval_node.cpp)
+add_dependencies(data_processing_eval_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(data_processing_eval_node
+  ${catkin_LIBRARIES}
+)
+
 #############
 ## Install ##
 #############

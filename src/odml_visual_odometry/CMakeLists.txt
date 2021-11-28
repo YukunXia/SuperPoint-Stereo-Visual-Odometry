@@ -188,6 +188,15 @@ target_link_libraries(visual_odometry_node
   stdc++fs
 )
 
+add_executable(visual_odometry_eval_node src/visual_odometry_eval_node.cpp)
+add_dependencies(visual_odometry_eval_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${odml_data_processing_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(visual_odometry_eval_node
+  ${catkin_LIBRARIES} 
+  ${OpenCV_LIBS}
+  feature_detection
+  stdc++fs
+)
+
 #############
 ## Install ##
 #############
