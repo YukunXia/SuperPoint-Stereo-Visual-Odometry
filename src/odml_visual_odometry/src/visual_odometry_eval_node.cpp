@@ -81,7 +81,7 @@ std::string trt_precision;
 int image_height;
 int image_width;
 
-int model_id = 0;
+int model_id = -1;
 
 cv::Mat
 cameraInfoToPMatrix(const sensor_msgs::CameraInfo::ConstPtr &camera_info_msg) {
@@ -231,7 +231,7 @@ void stereoCallback(
                 .count() /
             1000.0f);
     ROS_INFO("Total time per step = %.4f, FPS = %.4f", total_time_per_step,
-             1.0f / total_time_per_step);
+             1000.0f / total_time_per_step);
   }
 
   publishOdometry(cam0_curr_T_cam0_prev);
@@ -258,8 +258,8 @@ void stereoCallback(
                  .count() /
              1000.0f
       << "," << total_time_per_step << "\n";
-  if (total_time_per_step > 125.0f) {
-    ROS_WARN("total_time_per_step == %.4f > 125ms", total_time_per_step);
+  if (total_time_per_step > 300.0f) {
+    ROS_WARN("total_time_per_step == %.4f > 300ms", total_time_per_step);
   }
 }
 
@@ -268,52 +268,6 @@ void dataLodaerGoalCallback(
     const odml_data_processing::kitti_data_loaderActionGoalConstPtr
         &kiti_data_action_goal,
     ros::NodeHandle *nh) {
-
-  visual_odom_path.poses.clear();
-  base_stamped_tf_cam0_inited = false;
-  world_T_base_curr = tf2::Transform::getIdentity();
-  cam0_curr_T_cam0_prev_last_valid = tf2::Transform::getIdentity();
-
-  // handle directory for latency logs
-  std::string latency_log_path_name =
-      ros::package::getPath("odml_data_processing") + "/kitti_latency_csvs" +
-      (is_classic ? "/jetson" : "/laptop");
-  fs::path dir(latency_log_path_name);
-  if (!(fs::exists(dir))) {
-    if (fs::create_directory(dir)) {
-      ROS_INFO("%s is created", latency_log_path_name.c_str());
-    }
-  }
-  // handle file name
-  std::string latency_log_file_name =
-      "_seq_" + std::to_string(kiti_data_action_goal->goal.kitti_eval_id) +
-      ".csv";
-  if (is_classic) {
-    latency_log_file_name =
-        detector_type + "_" + descriptor_type + latency_log_file_name;
-  } else {
-    latency_log_file_name =
-        model_name_prefix + "_" + std::to_string(model_batch_size) + "_" +
-        std::to_string(image_height) + "_" + std::to_string(image_width) + "_" +
-        trt_precision + latency_log_file_name;
-  }
-  // open file
-  latency_log_file.open(latency_log_path_name + "/" + latency_log_file_name);
-  if (!latency_log_file.is_open()) {
-    ROS_ERROR("latency_log_file `%s` is not opened",
-              latency_log_file_name.c_str());
-    return;
-  }
-
-  first_frame = true;
-
-  stereo_sync_ptr =
-      std::make_shared<message_filters::Synchronizer<StereoSyncPolicy>>(
-          StereoSyncPolicy(20), *sub_image00_ptr, *sub_camera00_ptr,
-          *sub_image01_ptr, *sub_camera01_ptr);
-  stereo_sync_ptr->setInterMessageLowerBound(ros::Duration(0.09));
-  stereo_sync_ptr->registerCallback(
-      boost::bind(&stereoCallback, _1, _2, _3, _4));
 
   int model_id_now;
   nh->getParam("/model_id", model_id_now);
@@ -401,6 +355,54 @@ void dataLodaerGoalCallback(
   }
 
   ROS_INFO("visual odometry eval is ready (new model)");
+
+  visual_odom_path.poses.clear();
+  base_stamped_tf_cam0_inited = false;
+  world_T_base_curr = tf2::Transform::getIdentity();
+  cam0_curr_T_cam0_prev_last_valid = tf2::Transform::getIdentity();
+
+  // handle directory for latency logs
+  std::string device;
+  nh->getParam("/device", device);
+  std::string latency_log_path_name =
+      ros::package::getPath("odml_data_processing") + "/kitti_latency_csvs/" +
+      device;
+  fs::path dir(latency_log_path_name);
+  if (!(fs::exists(dir))) {
+    if (fs::create_directory(dir)) {
+      ROS_INFO("%s is created", latency_log_path_name.c_str());
+    }
+  }
+  // handle file name
+  std::string latency_log_file_name =
+      "_seq_" + std::to_string(kiti_data_action_goal->goal.kitti_eval_id) +
+      ".csv";
+  if (is_classic) {
+    latency_log_file_name =
+        detector_type + "_" + descriptor_type + latency_log_file_name;
+  } else {
+    latency_log_file_name =
+        model_name_prefix + "_" + std::to_string(model_batch_size) + "_" +
+        std::to_string(image_height) + "_" + std::to_string(image_width) + "_" +
+        trt_precision + latency_log_file_name;
+  }
+  // open file
+  latency_log_file.open(latency_log_path_name + "/" + latency_log_file_name);
+  if (!latency_log_file.is_open()) {
+    ROS_ERROR("latency_log_file `%s` is not opened",
+              latency_log_file_name.c_str());
+    return;
+  }
+
+  first_frame = true;
+
+  stereo_sync_ptr =
+      std::make_shared<message_filters::Synchronizer<StereoSyncPolicy>>(
+          StereoSyncPolicy(20), *sub_image00_ptr, *sub_camera00_ptr,
+          *sub_image01_ptr, *sub_camera01_ptr);
+  stereo_sync_ptr->setInterMessageLowerBound(ros::Duration(0.09));
+  stereo_sync_ptr->registerCallback(
+      boost::bind(&stereoCallback, _1, _2, _3, _4));
 }
 
 void dataLodaerResultCallback(

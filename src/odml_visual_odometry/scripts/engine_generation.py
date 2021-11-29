@@ -11,9 +11,9 @@ rospack = rospkg.RosPack()
 odml_visual_odometry_path = rospack.get_path(
     'odml_visual_odometry') + "/models/"
 model_prefices = ["superpoint_pretrained",
-                  "sp_sparse", "sp_mbv1", "sp_mvb2", "sp_squeeze"]
-device = "laptop"
-workspaces = {"laptop": 4096, "jetson": 3072}
+                  "sp_sparse", "sp_mbv1", "sp_mbv2", "sp_squeeze"]
+device = "workstation"
+workspaces = {"workstation": 4096, "laptop": 4096, "jetson": 3072}
 onnx_files = set([path.split("/")[-1]
                  for path in glob.glob(odml_visual_odometry_path + "*.onnx")])
 print("onnx files are: ", onnx_files)
@@ -31,6 +31,7 @@ for model_prefix in model_prefices:
                 for precision in precisions:
                     width = resolution[0]
                     height = resolution[1]
+                    # TODO: check if the folder exists
                     engine_file = "{}/{}_{}_{}_{}_FP{}.engine".format(
                         device, model_prefix, b, width, height, precision)
                     if exists(odml_visual_odometry_path + engine_file):
@@ -41,7 +42,7 @@ for model_prefix in model_prefices:
 
                     if test_mode:
                         continue
-                        
+
                     if precision == "16":
                         trt_proc = subprocess.Popen(
                             ['trtexec', '--onnx={}'.format(odml_visual_odometry_path+onnx_file_name), "--explicitBatch", "--minShapes=input:{}x1x{}x{}".format(b, width, height), "--optShapes=input:{}x1x{}x{}".format(b, width, height), "--maxShapes=input:{}x1x{}x{}".format(b, width, height), "--workspace={}".format(workspaces[device]), "--saveEngine={}".format(odml_visual_odometry_path+engine_file), "--fp{}".format(precision)])

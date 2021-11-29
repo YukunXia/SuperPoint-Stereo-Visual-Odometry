@@ -229,7 +229,7 @@ void stereoCallback(
                 .count() /
             1000.0f);
     ROS_INFO("Total time per step = %.4f, FPS = %.4f", total_time_per_step,
-             1.0f / total_time_per_step);
+             1000.0f / total_time_per_step);
   }
 
   publishOdometry(cam0_curr_T_cam0_prev);

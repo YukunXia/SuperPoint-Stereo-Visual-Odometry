@@ -19,7 +19,7 @@ build_isolated/
 devel_isolated/
 .catkin_workspace
 
-src/odml_data_processing/kitti_results/
+# src/odml_data_processing/kitti_results/
 .vscode/
 src/CMakeLists.txt
 *.engine

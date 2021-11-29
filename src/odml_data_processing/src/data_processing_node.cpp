@@ -86,7 +86,7 @@ void execute(
       (kiti_data_goal->description.empty() ? "/default"
                                            : "/" + kiti_data_goal->description);
   fs::path dir(visual_odom_result_path_name);
-
+  // ROS_INFO("odom result path = %s", visual_odom_result_path_name.c_str());
   if (!(fs::exists(dir))) {
     if (fs::create_directory(dir)) {
       ROS_INFO("%s is created", visual_odom_result_path_name.c_str());
