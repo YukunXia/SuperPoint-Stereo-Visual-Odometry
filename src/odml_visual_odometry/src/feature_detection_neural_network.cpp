@@ -232,7 +232,8 @@ void SuperPointFeatureFrontEnd::processOneHeatmap(
 
   // initialize output variables
   // keypoints_after_nms.clear();
-  keypoints_after_nms.reserve(keypoints_before_nms.size());
+  keypoints_after_nms.reserve(
+      std::min(max_keypoints_, (int)keypoints_before_nms.size()));
 
   for (const auto &keypoint : keypoints_before_nms) {
     const int row = keypoint.pt.y;
@@ -261,6 +262,8 @@ void SuperPointFeatureFrontEnd::processOneHeatmap(
         }
       }
     }
+    if (keypoints_after_nms.size() >= max_keypoints_)
+      break;
   }
 
   // store valuable data into dqs

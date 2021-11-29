@@ -359,6 +359,7 @@ private:
   const float conf_thresh_;
   const int dist_thresh_;
   const int border_remove_;
+  static constexpr int max_keypoints_ = 1000;
 
   sample::Logger g_logger_;
 

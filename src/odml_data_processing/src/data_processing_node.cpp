@@ -113,7 +113,7 @@ void execute(
   base_eigenT_cam0_inited = false;
 
   // play the bag
-  cmd = "rosbag play " + ros::package::getPath("odml_data_processing") +
+  cmd = "rosbag play --clock" + ros::package::getPath("odml_data_processing") +
         "/bags/" + kitti_eval_id_to_file_name[kiti_data_goal->kitti_eval_id] +
         " -d " + std::to_string(pre_waiting_time) + " -r " +
         std::to_string(rosbag_rate);

@@ -5,7 +5,7 @@
   </node>
 
   <node pkg="odml_data_processing" type="data_processing_node" name="data_processing_node" output="screen">
-    <param name="pre_waiting_time" type="int" value="5" />
+    <param name="pre_waiting_time" type="int" value="15" />
     <param name="rosbag_rate" type="double" value="0.33" />
   </node>
   

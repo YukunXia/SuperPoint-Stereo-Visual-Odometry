@@ -116,7 +116,7 @@ int main(int argc, char **argv) {
       }
 
       odml_data_processing::kitti_data_loaderActionGoal goal;
-      goal.goal.kitti_eval_id = seq_id;
+      goal.goal.kitti_eval_id = seq_ids.at(seq_id);
       goal.goal.description = engine_file_list.at(model_id);
       pub_goal.publish(goal);
       ++seq_id;
