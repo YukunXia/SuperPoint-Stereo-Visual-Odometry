@@ -69,6 +69,10 @@ Eigen::Isometry3d base_eigenT_cam0;
 void execute(
     const odml_data_processing::kitti_data_loaderGoalConstPtr &kiti_data_goal,
     KittiDataServer *kitti_data_server) {
+  ROS_INFO("[data_processing_node]\nnew goal received, kitti_eval_id = %d, "
+           "description = %s\n",
+           kiti_data_goal->kitti_eval_id, kiti_data_goal->description.c_str());
+
   kitti_data_loader_result.loading_finished = false;
 
   if (kiti_data_goal->kitti_eval_id < 0 ||
@@ -102,10 +106,13 @@ void execute(
   visual_odom_result_file.open(visual_odom_result_path_name + "/" +
                                visual_odom_result_file_name);
   if (!visual_odom_result_file.is_open()) {
-    ROS_ERROR("visual_odom_result_file `%s` is not "
-              "opened",
+    ROS_ERROR("[data_processing_node]\nvisual_odom_result_file `%s` is not "
+              "opened\n",
               visual_odom_result_file_name.c_str());
     return;
+  } else {
+    ROS_INFO("[data_processing_node]\nvisual_odom_result_file `%s` is opened\n",
+             visual_odom_result_file_name.c_str());
   }
 
   // reset transformation states
@@ -113,12 +120,12 @@ void execute(
   base_eigenT_cam0_inited = false;
 
   // play the bag
-  cmd = "rosbag play --clock" + ros::package::getPath("odml_data_processing") +
+  cmd = "rosbag play " + ros::package::getPath("odml_data_processing") +
         "/bags/" + kitti_eval_id_to_file_name[kiti_data_goal->kitti_eval_id] +
         " -d " + std::to_string(pre_waiting_time) + " -r " +
-        std::to_string(rosbag_rate);
+        std::to_string(rosbag_rate) + " --quiet";
 
-  ROS_INFO("The command is %s", cmd.c_str());
+  ROS_INFO("The command is %s\n", cmd.c_str());
   sys_ret = system(cmd.c_str());
   // wait for visual odometry to finish
   sleep(2);
@@ -193,6 +200,8 @@ int main(int argc, char **argv) {
       nh, "kitti_loader_action_server",
       boost::bind(&execute, _1, &kitti_data_server), false);
   kitti_data_server.start();
+
+  ROS_INFO("[data_processing_node]\n ready\n");
 
   ros::Rate loop_rate(100);
   while (ros::ok()) {

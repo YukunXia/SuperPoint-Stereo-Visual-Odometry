@@ -275,86 +275,93 @@ void dataLodaerGoalCallback(
   // model stays the same
   if (model_id_now == model_id) {
     feature_front_end_ptr->clearLagecyData();
-    ROS_INFO("visual odometry eval is ready (no new model)");
-    return;
-  }
-
-  // model should be updated
-  nh->getParam("/is_classic", is_classic);
-  bool verbose;
-  nh->getParam("/verbose", verbose);
-
-  if (is_classic) {
-    std::string matcher_type;
-    std::string selector_type;
-    double stereo_threshold;
-    double min_disparity;
-    int refinement_degree;
-    nh->getParam("/detector_type", detector_type);
-    nh->getParam("/descriptor_type", descriptor_type);
-    nh->getParam("/matcher_type", matcher_type);
-    nh->getParam("/selector_type", selector_type);
-    nh->getParam("/stereo_threshold", stereo_threshold);
-    nh->getParam("/min_disparity", min_disparity);
-    nh->getParam("/refinement_degree", refinement_degree);
-    feature_front_end_ptr = std::make_shared<ClassicFeatureFrontEnd>(
-        detector_name_to_type.at(detector_type),
-        descriptor_name_to_type.at(descriptor_type),
-        matcher_name_to_type.at(matcher_type),
-        selector_name_to_type.at(selector_type),
-        true, // cross check. only used in KNN mode
-        stereo_threshold, min_disparity, refinement_degree, verbose);
+    ROS_INFO("[visual odometry eval node]:\nvisual odometry eval is ready (no "
+             "new model)\n");
   } else {
-    std::string detector_type;
-    std::string descriptor_type;
-    nh->getParam("/detector_type", detector_type);
-    nh->getParam("/descriptor_type", descriptor_type);
-    if (detector_type == "SuperPoint" && descriptor_type == "SuperPoint") {
+    ROS_INFO("[visual odometry eval node]:\nvisual odometry eval requires new "
+             "model: prev model_id = %d, curr model_id = %d\n",
+             model_id, model_id_now);
+    model_id = model_id_now;
+
+    // model should be updated
+    nh->getParam("/is_classic", is_classic);
+    bool verbose;
+    nh->getParam("/verbose", verbose);
+
+    if (is_classic) {
       std::string matcher_type;
       std::string selector_type;
-      double conf_thresh;
-      int dist_thresh;
-      int num_threads;
-      int border_remove;
       double stereo_threshold;
       double min_disparity;
       int refinement_degree;
+      nh->getParam("/detector_type", detector_type);
+      nh->getParam("/descriptor_type", descriptor_type);
       nh->getParam("/matcher_type", matcher_type);
       nh->getParam("/selector_type", selector_type);
-      nh->getParam("/model_name_prefix", model_name_prefix);
-      nh->getParam("/model_batch_size", model_batch_size);
-      nh->getParam("/machine_name", machine_name);
-      nh->getParam("/trt_precision", trt_precision);
-      nh->getParam("/image_height", image_height);
-      nh->getParam("/image_width", image_width);
-      nh->getParam("/conf_thresh", conf_thresh);
-      nh->getParam("/dist_thresh", dist_thresh);
-      nh->getParam("/num_threads", num_threads);
-      nh->getParam("/border_remove", border_remove);
       nh->getParam("/stereo_threshold", stereo_threshold);
       nh->getParam("/min_disparity", min_disparity);
       nh->getParam("/refinement_degree", refinement_degree);
-      if (image_height % 8 != 0 || image_width % 8 != 0) {
-        ROS_ERROR("image_height(%d) or image_width(%d) is indivisble by 8",
-                  image_height, image_width);
-        return;
-      }
-      feature_front_end_ptr = std::make_shared<SuperPointFeatureFrontEnd>(
+      feature_front_end_ptr = std::make_shared<ClassicFeatureFrontEnd>(
+          detector_name_to_type.at(detector_type),
+          descriptor_name_to_type.at(descriptor_type),
           matcher_name_to_type.at(matcher_type),
           selector_name_to_type.at(selector_type),
           true, // cross check. only used in KNN mode
-          model_name_prefix, model_batch_size, machine_name,
-          trt_precision_string2enum.at(trt_precision), image_height,
-          image_width, conf_thresh, dist_thresh, num_threads, border_remove,
           stereo_threshold, min_disparity, refinement_degree, verbose);
     } else {
-      ROS_ERROR("Detector(%s) or descriptor(%s) not implemented",
-                detector_type.c_str(), descriptor_type.c_str());
-      return;
+      std::string detector_type;
+      std::string descriptor_type;
+      nh->getParam("/detector_type", detector_type);
+      nh->getParam("/descriptor_type", descriptor_type);
+      if (detector_type == "SuperPoint" && descriptor_type == "SuperPoint") {
+        std::string matcher_type;
+        std::string selector_type;
+        double conf_thresh;
+        int dist_thresh;
+        int num_threads;
+        int border_remove;
+        double stereo_threshold;
+        double min_disparity;
+        int refinement_degree;
+        nh->getParam("/matcher_type", matcher_type);
+        nh->getParam("/selector_type", selector_type);
+        nh->getParam("/model_name_prefix", model_name_prefix);
+        nh->getParam("/model_batch_size", model_batch_size);
+        nh->getParam("/machine_name", machine_name);
+        nh->getParam("/trt_precision", trt_precision);
+        nh->getParam("/image_height", image_height);
+        nh->getParam("/image_width", image_width);
+        nh->getParam("/conf_thresh", conf_thresh);
+        nh->getParam("/dist_thresh", dist_thresh);
+        nh->getParam("/num_threads", num_threads);
+        nh->getParam("/border_remove", border_remove);
+        nh->getParam("/stereo_threshold", stereo_threshold);
+        nh->getParam("/min_disparity", min_disparity);
+        nh->getParam("/refinement_degree", refinement_degree);
+        if (image_height % 8 != 0 || image_width % 8 != 0) {
+          ROS_ERROR("image_height(%d) or image_width(%d) is indivisble by 8",
+                    image_height, image_width);
+          return;
+        }
+        feature_front_end_ptr = std::make_shared<SuperPointFeatureFrontEnd>(
+            matcher_name_to_type.at(matcher_type),
+            selector_name_to_type.at(selector_type),
+            true, // cross check. only used in KNN mode
+            model_name_prefix, model_batch_size, machine_name,
+            trt_precision_string2enum.at(trt_precision), image_height,
+            image_width, conf_thresh, dist_thresh, num_threads, border_remove,
+            stereo_threshold, min_disparity, refinement_degree, verbose);
+      } else {
+        ROS_ERROR("[visual odometry eval node]:\n Detector(%s) or "
+                  "descriptor(%s) not implemented\n",
+                  detector_type.c_str(), descriptor_type.c_str());
+        return;
+      }
     }
-  }
 
-  ROS_INFO("visual odometry eval is ready (new model)");
+    ROS_INFO("[visual odometry eval node]:\nvisual odometry eval is ready (new "
+             "model)\n");
+  }
 
   visual_odom_path.poses.clear();
   base_stamped_tf_cam0_inited = false;
@@ -370,7 +377,8 @@ void dataLodaerGoalCallback(
   fs::path dir(latency_log_path_name);
   if (!(fs::exists(dir))) {
     if (fs::create_directory(dir)) {
-      ROS_INFO("%s is created", latency_log_path_name.c_str());
+      ROS_INFO("[visual odometry eval node]:\n%s is created\n",
+               latency_log_path_name.c_str());
     }
   }
   // handle file name
@@ -389,8 +397,9 @@ void dataLodaerGoalCallback(
   // open file
   latency_log_file.open(latency_log_path_name + "/" + latency_log_file_name);
   if (!latency_log_file.is_open()) {
-    ROS_ERROR("latency_log_file `%s` is not opened",
-              latency_log_file_name.c_str());
+    ROS_ERROR(
+        "[visual odometry eval node]:\nlatency_log_file `%s` is not opened\n",
+        latency_log_file_name.c_str());
     return;
   }
 
@@ -411,7 +420,8 @@ void dataLodaerResultCallback(
   assert(kiti_data_action_result->result.loading_finished == true);
 
   if (latency_log_file.is_open()) {
-    ROS_INFO("Data loader finished a sequence. Closing latency log file now");
+    ROS_INFO("[visual odometry eval node]:\nData loader finished a sequence. "
+             "Closing latency log file now\n");
     latency_log_file.close();
   }
 }
@@ -462,8 +472,9 @@ int main(int argc, char **argv) {
   }
 
   if (latency_log_file.is_open()) {
-    ROS_WARN("Haven't received the success result from data loader node, when "
-             "shutting down visual odometry node");
+    ROS_WARN(
+        "[visual odometry eval node]:\nHaven't received the success result "
+        "from data loader node, when shutting down visual odometry node\n");
     latency_log_file.close();
   }
 

@@ -67,8 +67,8 @@ int main(int argc, char **argv) {
               std::to_string(width) + "_" + std::to_string(height) + "_FP" +
               precision;
           engine_file_list.push_back(engine_file);
-          ROS_INFO("%d-th engine_file = %s", (int)engine_file_list.size() - 1,
-                   engine_file.c_str());
+          ROS_INFO("[data_processing_eval_node]\n%d-th engine_file = %s\n",
+                   (int)engine_file_list.size() - 1, engine_file.c_str());
 
           model_prefix_list.push_back(model_prefix);
           batch_choice_list.push_back(batch_choice);
@@ -79,7 +79,8 @@ int main(int argc, char **argv) {
       }
     }
   }
-  ROS_INFO("\n In total, %lu engine files", engine_file_list.size());
+  ROS_INFO("[data_processing_eval_node]\n In total, %lu engine files\n",
+           engine_file_list.size());
 
   // http://wiki.ros.org/actionlib_tutorials/Tutorials/SimpleActionServer%28ExecuteCallbackMethod%29
   ros::Subscriber data_lodaer_result_sub = nh.subscribe(
@@ -88,7 +89,7 @@ int main(int argc, char **argv) {
       "/kitti_loader_action_server/goal", 10);
 
   for (int i = 0; i < 3; ++i) {
-    ROS_INFO("countdown: %d sec", 3 - i);
+    ROS_INFO("[data_processing_eval_node]\ncountdown: %d sec\n", 3 - i);
     sleep(1);
   }
 
@@ -97,27 +98,38 @@ int main(int argc, char **argv) {
   while (ros::ok() && model_id < (int)model_prefix_list.size()) {
     if (loading_finished == true) {
       if (model_id >= 0)
-        ROS_INFO("data loading for seq %d finished", seq_id);
+        ROS_INFO(
+            "[data_processing_eval_node]\ndata loading for seq %d finished\n",
+            seq_id);
 
       // start a new model to eval
       if (seq_id == seq_ids.size()) {
         ++model_id;
         seq_id = 0;
+
+        ROS_INFO("[data_processing_eval_node]\nnew round of seqs. loading "
+                 "%d-th engine (%s)\n",
+                 model_id, engine_file_list.at(model_id).c_str());
+        ROS_INFO("[data_processing_eval_node]\ndevice: %s, model_id: %d\n",
+                 device.c_str(), model_id);
+
         nh.setParam("/device", device);
+        nh.setParam("/machine_name", device);
         nh.setParam("/model_id", model_id);
         nh.setParam("/image_height", height_list.at(model_id));
         nh.setParam("/image_width", width_list.at(model_id));
         nh.setParam("/model_name_prefix", model_prefix_list.at(model_id));
         nh.setParam("/model_batch_size", batch_choice_list.at(model_id));
         nh.setParam("/trt_precision", precision_list.at(model_id));
-
-        ROS_INFO("loading %d-th engine (%s)", model_id,
-                 engine_file_list.at(model_id).c_str());
+        ROS_INFO("[data_processing_eval_node]\nnew parameters are set\n");
       }
 
       odml_data_processing::kitti_data_loaderActionGoal goal;
       goal.goal.kitti_eval_id = seq_ids.at(seq_id);
       goal.goal.description = engine_file_list.at(model_id);
+      ROS_INFO("[data_processing_eval_node]\nsending new goal now: "
+               "kitti_eval_id = %d = seq_ids.at(%d), description = %s\n",
+               goal.goal.kitti_eval_id, seq_id, goal.goal.description.c_str());
       pub_goal.publish(goal);
       ++seq_id;
       loading_finished = false;

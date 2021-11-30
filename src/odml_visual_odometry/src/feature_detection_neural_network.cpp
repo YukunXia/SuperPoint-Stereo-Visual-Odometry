@@ -69,12 +69,12 @@ void SuperPointFeatureFrontEnd::loadTrtEngine() {
     size_t binding_size = 1;
     const nvinfer1::Dims &dims = engine_->getBindingDimensions(i);
     // print dimensions of each layer
-    std::cout << "layer " << i << ": ";
+    // std::cout << "layer " << i << ": ";
     for (size_t j = 0; j < dims.nbDims; ++j) {
       binding_size *= dims.d[j];
-      std::cout << dims.d[j] << ", ";
+      // std::cout << dims.d[j] << ", ";
     }
-    std::cout << std::endl;
+    // std::cout << std::endl;
     binding_size *= sizeof(float);
 
     if (binding_size == 0) {
@@ -85,10 +85,10 @@ void SuperPointFeatureFrontEnd::loadTrtEngine() {
     cudaMalloc(&buffers_[i], binding_size);
     if (engine_->bindingIsInput(i)) {
       input_dims.emplace_back(engine_->getBindingDimensions(i));
-      ROS_INFO("Input layer, size = %lu", binding_size / sizeof(float));
+      // ROS_INFO("Input layer, size = %lu", binding_size / sizeof(float));
     } else {
       output_dims.emplace_back(engine_->getBindingDimensions(i));
-      ROS_INFO("Output layer, size = %lu", binding_size / sizeof(float));
+      // ROS_INFO("Output layer, size = %lu", binding_size / sizeof(float));
     }
   }
 

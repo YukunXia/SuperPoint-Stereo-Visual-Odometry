@@ -381,6 +381,13 @@ void FeatureFrontEnd::matchDescriptors(const MatchType match_type) {
     }
   }
 
+  if (descriptors0.rows < 10) {
+    ROS_WARN("descriptors0.rows == %d < 10", descriptors0.rows);
+  }
+  if (descriptors1.rows < 10) {
+    ROS_WARN("descriptors1.rows == %d < 10", descriptors1.rows);
+  }
+
   std::vector<cv::DMatch> &cv_Dmatches = cv_DMatches_list[match_type];
   cv_Dmatches.clear();
   if (selector_type_ == SelectorType::NN) {
@@ -417,6 +424,10 @@ void FeatureFrontEnd::matchDescriptors(const MatchType match_type) {
   if (verbose_)
     ROS_INFO("%lu matches for %s", cv_Dmatches.size(),
              MatchType_str[match_type].c_str());
+  if (cv_Dmatches.size() < 10) {
+    ROS_WARN("%lu matches < 10 for %s", cv_Dmatches.size(),
+             MatchType_str[match_type].c_str());
+  }
 }
 
 cv::Mat FeatureFrontEnd::visualizeInliers(const ImagePosition image_position) {
