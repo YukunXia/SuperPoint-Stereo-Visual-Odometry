@@ -68,7 +68,7 @@ Eigen::Isometry3d base_eigenT_cam0;
 
 void execute(
     const odml_data_processing::kitti_data_loaderGoalConstPtr &kiti_data_goal,
-    KittiDataServer *kitti_data_server) {
+    KittiDataServer *kitti_data_server, ros::NodeHandle* nh) {
   ROS_INFO("[data_processing_node]\nnew goal received, kitti_eval_id = %d, "
            "description = %s\n",
            kiti_data_goal->kitti_eval_id, kiti_data_goal->description.c_str());
@@ -120,10 +120,12 @@ void execute(
   base_eigenT_cam0_inited = false;
 
   // play the bag
+  double rosbag_rate;
+  nh->getParam("rosbag_rate", rosbag_rate);
   cmd = "rosbag play " + ros::package::getPath("odml_data_processing") +
         "/bags/" + kitti_eval_id_to_file_name[kiti_data_goal->kitti_eval_id] +
         " -d " + std::to_string(pre_waiting_time) + " -r " +
-        std::to_string(rosbag_rate) + " --quiet";
+        std::to_string(rosbag_rate);// + " --quiet";
 
   ROS_INFO("The command is %s\n", cmd.c_str());
   sys_ret = system(cmd.c_str());
@@ -189,7 +191,6 @@ int main(int argc, char **argv) {
   ros::NodeHandle nh_private = ros::NodeHandle("~");
   nh_private.getParam("pre_waiting_time", pre_waiting_time);
   pre_waiting_time = std::max(2, pre_waiting_time);
-  nh_private.getParam("rosbag_rate", rosbag_rate);
 
   ros::NodeHandle nh;
 
@@ -198,7 +199,7 @@ int main(int argc, char **argv) {
 
   KittiDataServer kitti_data_server(
       nh, "kitti_loader_action_server",
-      boost::bind(&execute, _1, &kitti_data_server), false);
+      boost::bind(&execute, _1, &kitti_data_server, &nh), false);
   kitti_data_server.start();
 
   ROS_INFO("[data_processing_node]\n ready\n");

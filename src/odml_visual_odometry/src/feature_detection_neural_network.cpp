@@ -21,6 +21,25 @@
 ///////////////////////////neural_network_classe_func_def//////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 
+SuperPointFeatureFrontEnd::~SuperPointFeatureFrontEnd() {
+  CUDA_CHECK(cudaStreamDestroy(stream_));
+
+  for (int i = 0; i < BUFFER_SIZE; ++i) {
+    CUDA_CHECK(cudaFree(buffers_[i]));
+  }
+
+  // TODO: understand why context_->destroy will kill the process with exit code
+  // -11 (Maybe upgrade TensorRT to 8.2)
+  // I can not reference to the actual definition of nvinfer1::IExecutionContext
+  // (Not open sourced) The following line is really just a walkaround. It's
+  // likely to cause memory leak. The problem is super strange because runtime_
+  // and engine_ have no issue calling the destroy function. Besides, the
+  // destructors for TensorRT objects have already considered the validity
+  // before trying to call the destroy function. A side note is that the destroy
+  // function is said to be deprecated from TensorRT 10.0
+  context_.release();
+}
+
 void SuperPointFeatureFrontEnd::loadTrtEngine() {
   const std::string model_name_full =
       ros::package::getPath("odml_visual_odometry") + "/models/" +
@@ -42,17 +61,37 @@ void SuperPointFeatureFrontEnd::loadTrtEngine() {
   const size_t trt_stream_size = engine_file.tellg();
   engine_file.seekg(0, engine_file.beg);
 
-  trt_model_stream_ = std::unique_ptr<char[]>(new char[trt_stream_size]);
-  assert(trt_model_stream_);
-  engine_file.read(trt_model_stream_.get(), trt_stream_size);
+  std::unique_ptr<char[]> trt_model_stream(new char[trt_stream_size]);
+  assert(trt_model_stream);
+  engine_file.read(trt_model_stream.get(), trt_stream_size);
   engine_file.close();
 
-  runtime_ = nvinfer1::createInferRuntime(g_logger_);
+  sample::Logger g_logger;
+  runtime_ = std::unique_ptr<nvinfer1::IRuntime,
+                             std::function<void(nvinfer1::IRuntime *)>>(
+      nvinfer1::createInferRuntime(g_logger), [](nvinfer1::IRuntime *p) {
+        ROS_INFO("runtime_ destructor");
+        if (p)
+          p->destroy();
+      });
   assert(runtime_ != nullptr);
-  engine_ =
-      runtime_->deserializeCudaEngine(trt_model_stream_.get(), trt_stream_size);
+  engine_ = std::unique_ptr<nvinfer1::ICudaEngine,
+                            std::function<void(nvinfer1::ICudaEngine *)>>(
+      runtime_->deserializeCudaEngine(trt_model_stream.get(), trt_stream_size),
+      [](nvinfer1::ICudaEngine *p) {
+        if (p)
+          p->destroy();
+      });
   assert(engine_ != nullptr);
-  context_ = engine_->createExecutionContext();
+  context_ =
+      std::unique_ptr<nvinfer1::IExecutionContext,
+                      std::function<void(nvinfer1::IExecutionContext *)>>(
+          engine_->createExecutionContext(),
+          [](nvinfer1::IExecutionContext *p) {
+            if (p) {
+              p->destroy();
+            }
+          });
   assert(context_ != nullptr);
   if (engine_->getNbBindings() != BUFFER_SIZE) {
     ROS_ERROR("engine->getNbBindings() == %d, but should be %d",
@@ -69,12 +108,12 @@ void SuperPointFeatureFrontEnd::loadTrtEngine() {
     size_t binding_size = 1;
     const nvinfer1::Dims &dims = engine_->getBindingDimensions(i);
     // print dimensions of each layer
-    // std::cout << "layer " << i << ": ";
+    std::cout << "layer " << i << ": ";
     for (size_t j = 0; j < dims.nbDims; ++j) {
       binding_size *= dims.d[j];
-      // std::cout << dims.d[j] << ", ";
+      std::cout << dims.d[j] << ", ";
     }
-    // std::cout << std::endl;
+    std::cout << std::endl;
     binding_size *= sizeof(float);
 
     if (binding_size == 0) {
@@ -82,13 +121,13 @@ void SuperPointFeatureFrontEnd::loadTrtEngine() {
       return;
     }
 
-    cudaMalloc(&buffers_[i], binding_size);
+    CUDA_CHECK(cudaMalloc(&buffers_[i], binding_size));
     if (engine_->bindingIsInput(i)) {
       input_dims.emplace_back(engine_->getBindingDimensions(i));
-      // ROS_INFO("Input layer, size = %lu", binding_size / sizeof(float));
+      ROS_INFO("Input layer, size = %lu", binding_size / sizeof(float));
     } else {
       output_dims.emplace_back(engine_->getBindingDimensions(i));
-      // ROS_INFO("Output layer, size = %lu", binding_size / sizeof(float));
+      ROS_INFO("Output layer, size = %lu", binding_size / sizeof(float));
     }
   }
 

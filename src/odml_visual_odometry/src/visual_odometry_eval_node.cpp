@@ -62,7 +62,7 @@ cv_bridge::CvImagePtr cv_ptr_r;
 bool first_frame = true;
 tf2::Transform world_T_base_curr = tf2::Transform::getIdentity();
 
-std::shared_ptr<FeatureFrontEnd> feature_front_end_ptr;
+std::unique_ptr<FeatureFrontEnd> feature_front_end_ptr;
 std::array<image_transport::Publisher, MATCH_TYPE_NUM> pub_matches_img_list;
 image_transport::Publisher pub_inliers;
 
@@ -82,6 +82,7 @@ int image_height;
 int image_width;
 
 int model_id = -1;
+double time_for_warning = 100.0;
 
 cv::Mat
 cameraInfoToPMatrix(const sensor_msgs::CameraInfo::ConstPtr &camera_info_msg) {
@@ -258,8 +259,9 @@ void stereoCallback(
                  .count() /
              1000.0f
       << "," << total_time_per_step << "\n";
-  if (total_time_per_step > 300.0f) {
-    ROS_WARN("total_time_per_step == %.4f > 300ms", total_time_per_step);
+  if (total_time_per_step > time_for_warning) {
+    ROS_WARN("total_time_per_step == %.4f > %.4fms", total_time_per_step,
+             time_for_warning);
   }
 }
 
@@ -301,7 +303,8 @@ void dataLodaerGoalCallback(
       nh->getParam("/stereo_threshold", stereo_threshold);
       nh->getParam("/min_disparity", min_disparity);
       nh->getParam("/refinement_degree", refinement_degree);
-      feature_front_end_ptr = std::make_shared<ClassicFeatureFrontEnd>(
+      feature_front_end_ptr.release();
+      feature_front_end_ptr = std::make_unique<ClassicFeatureFrontEnd>(
           detector_name_to_type.at(detector_type),
           descriptor_name_to_type.at(descriptor_type),
           matcher_name_to_type.at(matcher_type),
@@ -343,7 +346,7 @@ void dataLodaerGoalCallback(
                     image_height, image_width);
           return;
         }
-        feature_front_end_ptr = std::make_shared<SuperPointFeatureFrontEnd>(
+        feature_front_end_ptr = std::make_unique<SuperPointFeatureFrontEnd>(
             matcher_name_to_type.at(matcher_type),
             selector_name_to_type.at(selector_type),
             true, // cross check. only used in KNN mode
@@ -401,9 +404,17 @@ void dataLodaerGoalCallback(
         "[visual odometry eval node]:\nlatency_log_file `%s` is not opened\n",
         latency_log_file_name.c_str());
     return;
+  } else {
+    ROS_INFO("[visual odometry eval node]:\nlatency_log_file `%s` is "
+             "successfully opened\n",
+             latency_log_file_name.c_str());
   }
 
   first_frame = true;
+
+  double rosbag_rate;
+  nh->getParam("/rosbag_rate", rosbag_rate);
+  time_for_warning = 1000.0 / (10.0 * rosbag_rate) * 0.9;
 
   stereo_sync_ptr =
       std::make_shared<message_filters::Synchronizer<StereoSyncPolicy>>(
@@ -412,6 +423,8 @@ void dataLodaerGoalCallback(
   stereo_sync_ptr->setInterMessageLowerBound(ros::Duration(0.09));
   stereo_sync_ptr->registerCallback(
       boost::bind(&stereoCallback, _1, _2, _3, _4));
+  ROS_INFO("[visual odometry eval node]:\n stereo_sync_ptr is successfully "
+           "reset, and this is the end of the dataLodaerGoalCallback func.\n");
 }
 
 void dataLodaerResultCallback(

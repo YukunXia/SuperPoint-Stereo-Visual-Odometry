@@ -36,9 +36,14 @@ void FeatureFrontEnd::clearLagecyData() {
   images_dq.clear();
   keypoints_dq.clear();
   descriptors_dq.clear();
+
   for (auto &cv_DMatches : cv_DMatches_list) {
     cv_DMatches.clear();
   }
+
+  projection_matrix_l_.release();
+  projection_matrix_r_.release();
+
   r_vec_pred = cv::Mat::zeros(3, 1, CV_64FC1);
   t_vec_pred = cv::Mat::zeros(3, 1, CV_64FC1);
   frame_count = 0;
@@ -46,6 +51,15 @@ void FeatureFrontEnd::clearLagecyData() {
     map_of_indices.clear();
   }
   prev_left_points_3d_inited = false;
+
+  inliers_postmatching.clear();
+  inliers_pnp.clear();
+
+  prev_left_points_3d.release();
+
+  map_from_prev_left_matched_to_prev_valid_index.clear();
+  map_from_curr_valid_to_prev_left_matched_index.clear();
+  map_from_curr_left_matched_to_curr_valid_index.clear();
 
   inliers_postmatching.clear();
   inliers_pnp.clear();

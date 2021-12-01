@@ -9,7 +9,6 @@
 bool loading_finished = true;
 ros::Publisher pub_goal;
 int model_id = -1;
-std::string device;
 
 std::vector<std::string> engine_file_list;
 std::vector<std::string> model_prefix_list;
@@ -37,7 +36,12 @@ int main(int argc, char **argv) {
   ros::init(argc, argv, "data_processing_eval_node");
 
   ros::NodeHandle nh_private = ros::NodeHandle("~");
+  std::string device;
+  double rosbag_rate;
+  bool verbose;
   nh_private.getParam("device", device);
+  nh_private.getParam("rosbag_rate", rosbag_rate);
+  nh_private.getParam("verbose", verbose);
   ros::NodeHandle nh;
 
   nh.setParam("/is_classic", false);
@@ -45,7 +49,6 @@ int main(int argc, char **argv) {
   nh.setParam("/descriptor_type", "SuperPoint");
   nh.setParam("/matcher_type", "BF");
   nh.setParam("/selector_type", "KNN");
-  nh.setParam("/machine_name", "workstation");
   nh.setParam("/conf_thresh", 0.015);
   nh.setParam("/dist_thresh", 4);
   nh.setParam("/num_threads", 8);
@@ -53,7 +56,10 @@ int main(int argc, char **argv) {
   nh.setParam("/stereo_threshold", 2.0);
   nh.setParam("/min_disparity", 0.25);
   nh.setParam("/refinement_degree", 4);
-  nh.setParam("/verbose", false);
+  nh.setParam("/verbose", verbose);
+  nh.setParam("/device", device);
+  nh.setParam("/machine_name", device);
+  nh.setParam("/rosbag_rate", rosbag_rate);
 
   // nh.setParam("/model_id", 0);
   for (const auto &model_prefix : model_prefices) {
@@ -113,8 +119,6 @@ int main(int argc, char **argv) {
         ROS_INFO("[data_processing_eval_node]\ndevice: %s, model_id: %d\n",
                  device.c_str(), model_id);
 
-        nh.setParam("/device", device);
-        nh.setParam("/machine_name", device);
         nh.setParam("/model_id", model_id);
         nh.setParam("/image_height", height_list.at(model_id));
         nh.setParam("/image_width", width_list.at(model_id));

@@ -106,6 +106,7 @@ public:
         cross_check_(cross_check), stereo_threshold_(stereo_threshold),
         min_disparity_(min_disparity), refinement_degree_(refinement_degree),
         verbose_(verbose) {}
+  virtual ~FeatureFrontEnd(){};
   void initMatcher();
   void clearLagecyData();
   virtual void addStereoImagePair(cv::Mat &img_l, cv::Mat &img_r,
@@ -297,6 +298,8 @@ public:
     loadTrtEngine();
   }
 
+  ~SuperPointFeatureFrontEnd();
+
   void initPointers() {
     input_data_ = std::unique_ptr<float[]>(new float[input_size_]);
     output_det_data_ = std::unique_ptr<float[]>(new float[output_det_size_]);
@@ -361,20 +364,21 @@ private:
   const int border_remove_;
   static constexpr int max_keypoints_ = 1000;
 
-  sample::Logger g_logger_;
-
-  nvinfer1::ICudaEngine *engine_ = nullptr;
-  nvinfer1::IExecutionContext *context_ = nullptr;
-  nvinfer1::IRuntime *runtime_ = nullptr;
+  std::unique_ptr<nvinfer1::IRuntime, std::function<void(nvinfer1::IRuntime *)>>
+      runtime_;
+  std::unique_ptr<nvinfer1::ICudaEngine,
+                  std::function<void(nvinfer1::ICudaEngine *)>>
+      engine_;
+  std::unique_ptr<nvinfer1::IExecutionContext,
+                  std::function<void(nvinfer1::IExecutionContext *)>>
+      context_;
   cudaStream_t stream_;
   // buffers for input and output data
   // std::vector<void *> buffers_ = std::vector<void *>(BUFFER_SIZE);
   std::array<void *, BUFFER_SIZE> buffers_;
-  std::unique_ptr<float[]> input_data_ = nullptr;
-  cv::Mat img_input;
-  std::unique_ptr<float[]> output_det_data_ = nullptr;
-  std::unique_ptr<float[]> output_desc_data_ = nullptr;
-  std::unique_ptr<char[]> trt_model_stream_ = nullptr;
+  std::unique_ptr<float[]> input_data_;
+  std::unique_ptr<float[]> output_det_data_;
+  std::unique_ptr<float[]> output_desc_data_;
 
   // Performance engineering
   const int num_threads_;
