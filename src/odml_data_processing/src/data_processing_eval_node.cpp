@@ -18,8 +18,7 @@ std::vector<int> width_list;
 std::vector<int> height_list;
 std::vector<std::string> precision_list;
 
-std::vector<std::string> model_prefices = {"superpoint_pretrained", "sp_sparse",
-                                           "sp_mbv1", "sp_mbv2", "sp_squeeze"};
+std::vector<std::string> model_prefices = {"sp_squeeze"};
 std::vector<int> batch_choices = {1, 2};
 std::vector<std::pair<int, int>> resolutions = {
     {360, 1176}, {240, 784}, {120, 392}};
@@ -98,9 +97,15 @@ int main(int argc, char **argv) {
   while (ros::ok() && model_id < (int)model_prefix_list.size()) {
     if (loading_finished == true) {
       if (model_id >= 0)
+        ROS_INFO("[data_processing_eval_node]\ndata loading for seq %d is "
+                 "finished\n",
+                 seq_id);
+      if (model_id == model_prefix_list.size() - 1) {
         ROS_INFO(
-            "[data_processing_eval_node]\ndata loading for seq %d finished\n",
-            seq_id);
+            "[data_processing_eval_node]\ndata loading for all sequences "
+            "and models is finished. Quitting data_processing_eval_node...\n");
+        break;
+      }
 
       // start a new model to eval
       if (seq_id == seq_ids.size()) {
