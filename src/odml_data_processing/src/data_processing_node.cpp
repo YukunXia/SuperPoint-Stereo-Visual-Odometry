@@ -68,7 +68,7 @@ Eigen::Isometry3d base_eigenT_cam0;
 
 void execute(
     const odml_data_processing::kitti_data_loaderGoalConstPtr &kiti_data_goal,
-    KittiDataServer *kitti_data_server, ros::NodeHandle* nh) {
+    KittiDataServer *kitti_data_server, ros::NodeHandle *nh) {
   ROS_INFO("[data_processing_node]\nnew goal received, kitti_eval_id = %d, "
            "description = %s\n",
            kiti_data_goal->kitti_eval_id, kiti_data_goal->description.c_str());
@@ -82,6 +82,7 @@ void execute(
   // update seq info for saving
   seq_start = kitti_eval_id_to_start_frame[kiti_data_goal->kitti_eval_id];
   seq_end = kitti_eval_id_to_end_frame[kiti_data_goal->kitti_eval_id];
+  seq_count = 0;
   world_eigenT_base_start_inited = false;
 
   // handle directory
@@ -125,7 +126,7 @@ void execute(
   cmd = "rosbag play " + ros::package::getPath("odml_data_processing") +
         "/bags/" + kitti_eval_id_to_file_name[kiti_data_goal->kitti_eval_id] +
         " -d " + std::to_string(pre_waiting_time) + " -r " +
-        std::to_string(rosbag_rate);// + " --quiet";
+        std::to_string(rosbag_rate); // + " --quiet";
 
   ROS_INFO("The command is %s\n", cmd.c_str());
   sys_ret = system(cmd.c_str());
