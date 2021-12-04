@@ -18,8 +18,8 @@ std::vector<int> width_list;
 std::vector<int> height_list;
 std::vector<std::string> precision_list;
 
-std::vector<std::string> model_prefices = {"sp_squeeze"};
-std::vector<int> batch_choices = {1, 2};
+std::vector<std::string> model_prefices = {"sp_mbv1", "sp_mbv2"};
+std::vector<int> batch_choices = {2};
 std::vector<std::pair<int, int>> resolutions = {
     {360, 1176}, {240, 784}, {120, 392}};
 std::vector<std::string> precisions = {"32", "16"};

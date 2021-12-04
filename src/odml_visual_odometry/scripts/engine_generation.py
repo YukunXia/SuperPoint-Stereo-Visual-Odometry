@@ -11,7 +11,7 @@ rospack = rospkg.RosPack()
 odml_visual_odometry_path = rospack.get_path(
     'odml_visual_odometry') + "/models/"
 model_prefices = ["superpoint_pretrained",
-                  "sp_sparse", "sp_mbv1", "sp_mbv2", "sp_squeeze"]
+                  "sp_sparse", "sp_mbv1", "sp_mbv2", "sp_squeeze", "sp_resnet18"]
 device = "workstation"
 workspaces = {"workstation": 4096, "laptop": 4096, "jetson": 3072}
 onnx_files = set([path.split("/")[-1]
