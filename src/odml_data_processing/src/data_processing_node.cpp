@@ -81,6 +81,7 @@ void execute(
 
   // update seq info for saving
   seq_start = kitti_eval_id_to_start_frame[kiti_data_goal->kitti_eval_id];
+  seq_count = 0;
   seq_end = kitti_eval_id_to_end_frame[kiti_data_goal->kitti_eval_id];
   seq_count = 0;
   world_eigenT_base_start_inited = false;

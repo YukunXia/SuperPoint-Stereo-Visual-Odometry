@@ -108,9 +108,9 @@ int main(int argc, char **argv) {
   while (ros::ok() && model_id < (int)model_prefix_list.size()) {
     if (loading_finished == true) {
       if (model_id >= 0)
-        ROS_INFO(
-            "[data_processing_eval_node]\ndata loading for seq %d finished\n",
-            seq_id);
+        ROS_INFO("[data_processing_eval_node]\ndata loading for seq %d is "
+                 "finished\n",
+                 seq_id);
 
       // start a new model to eval
       if (seq_id == seq_ids.size()) {
