@@ -3,7 +3,7 @@
 
   <node pkg="odml_data_processing" type="data_processing_eval_node" name="data_processing_eval_node" output="screen">
     <param name="device" type="string" value="laptop" />
-    <param name="rosbag_rate" type="double" value="0.6" />
+    <param name="rosbag_rate" type="double" value="0.7" />
     <param name="verbose" type="bool" value="false" />
   </node>
 

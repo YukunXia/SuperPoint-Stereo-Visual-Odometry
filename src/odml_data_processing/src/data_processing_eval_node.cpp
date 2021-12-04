@@ -23,7 +23,7 @@ std::vector<std::string> model_prefices = {"superpoint_pretrained",
                                            "sp_mbv2",
                                            "sp_squeeze",
                                            "sp_resnet18"};
-std::vector<int> batch_choices = {1, 2};
+std::vector<int> batch_choices = {2};
 std::vector<std::pair<int, int>> resolutions = {
     {360, 1176}, {240, 784}, {120, 392}};
 std::vector<std::string> precisions = {"32", "16"};
@@ -114,6 +114,13 @@ int main(int argc, char **argv) {
 
       // start a new model to eval
       if (seq_id == seq_ids.size()) {
+        if (model_id == model_prefix_list.size() - 1) {
+          ROS_INFO(
+              "[data_processing_eval_node]\ndata loading for all sequences "
+              "and models is finished. Quitting "
+              "data_processing_eval_node...\n");
+          break;
+        }
         ++model_id;
         seq_id = 0;
 
