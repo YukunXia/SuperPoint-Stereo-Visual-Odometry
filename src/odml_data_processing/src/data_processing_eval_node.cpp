@@ -100,15 +100,16 @@ int main(int argc, char **argv) {
         ROS_INFO("[data_processing_eval_node]\ndata loading for seq %d is "
                  "finished\n",
                  seq_id);
-      if (model_id == model_prefix_list.size() - 1) {
-        ROS_INFO(
-            "[data_processing_eval_node]\ndata loading for all sequences "
-            "and models is finished. Quitting data_processing_eval_node...\n");
-        break;
-      }
 
       // start a new model to eval
       if (seq_id == seq_ids.size()) {
+        if (model_id == model_prefix_list.size() - 1) {
+          ROS_INFO(
+              "[data_processing_eval_node]\ndata loading for all sequences "
+              "and models is finished. Quitting "
+              "data_processing_eval_node...\n");
+          break;
+        }
         ++model_id;
         seq_id = 0;
 
