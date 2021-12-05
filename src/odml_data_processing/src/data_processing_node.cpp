@@ -103,17 +103,17 @@ void execute(
   if (visual_odom_result_file_name.size() == 10)
     visual_odom_result_file_name = "0" + visual_odom_result_file_name;
 
-  visual_odom_result_file.open(visual_odom_result_path_name + "/" +
-                               visual_odom_result_file_name);
-  if (!visual_odom_result_file.is_open()) {
-    ROS_ERROR("[data_processing_node]\nvisual_odom_result_file `%s` is not "
-              "opened\n",
-              visual_odom_result_file_name.c_str());
-    return;
-  } else {
-    ROS_INFO("[data_processing_node]\nvisual_odom_result_file `%s` is opened\n",
-             visual_odom_result_file_name.c_str());
-  }
+  // visual_odom_result_file.open(visual_odom_result_path_name + "/" +
+  //                              visual_odom_result_file_name);
+  // if (!visual_odom_result_file.is_open()) {
+  //   ROS_ERROR("[data_processing_node]\nvisual_odom_result_file `%s` is not "
+  //             "opened\n",
+  //             visual_odom_result_file_name.c_str());
+  //   return;
+  // } else {
+  //   ROS_INFO("[data_processing_node]\nvisual_odom_result_file `%s` is opened\n",
+  //            visual_odom_result_file_name.c_str());
+  // }
 
   // reset transformation states
   world_eigenT_base_start_inited = false;
@@ -132,7 +132,7 @@ void execute(
   // wait for visual odometry to finish
   sleep(2);
 
-  visual_odom_result_file.close();
+  // visual_odom_result_file.close();
 
   // http://wiki.ros.org/actionlib_tutorials/Tutorials/SimpleActionServer%28ExecuteCallbackMethod%29
   kitti_data_loader_result.loading_finished = true;
@@ -140,49 +140,49 @@ void execute(
 }
 
 void visualOdomCallback(const nav_msgs::Odometry::ConstPtr visual_odom_msg) {
-  if (seq_count < seq_start) {
-    ++seq_count;
-    return;
-  }
+  // if (seq_count < seq_start) {
+  //   ++seq_count;
+  //   return;
+  // }
 
-  // from here: seq_count >= seq_start
-  const geometry_msgs::Pose &world_geoT_base_curr = visual_odom_msg->pose.pose;
+  // // from here: seq_count >= seq_start
+  // const geometry_msgs::Pose &world_geoT_base_curr = visual_odom_msg->pose.pose;
 
-  Eigen::Isometry3d world_eigenT_base_curr;
-  tf::poseMsgToEigen(world_geoT_base_curr, world_eigenT_base_curr);
+  // Eigen::Isometry3d world_eigenT_base_curr;
+  // tf::poseMsgToEigen(world_geoT_base_curr, world_eigenT_base_curr);
 
-  if (!world_eigenT_base_start_inited) {
-    world_eigenT_base_start_inited = true;
-    world_eigenT_base_start = world_eigenT_base_curr;
-  }
+  // if (!world_eigenT_base_start_inited) {
+  //   world_eigenT_base_start_inited = true;
+  //   world_eigenT_base_start = world_eigenT_base_curr;
+  // }
 
-  Eigen::Isometry3d base_start_eigenT_base_curr =
-      world_eigenT_base_start.inverse() * world_eigenT_base_curr;
+  // Eigen::Isometry3d base_start_eigenT_base_curr =
+  //     world_eigenT_base_start.inverse() * world_eigenT_base_curr;
 
-  if (!base_eigenT_cam0_inited) {
-    tf2_ros::Buffer tf_buffer;
-    tf2_ros::TransformListener tf_listener(tf_buffer);
-    // cam0 means gray left camera
-    geometry_msgs::TransformStamped base_stamped_tf_cam0;
-    base_stamped_tf_cam0 = tf_buffer.lookupTransform(
-        "base_link", "camera_gray_left", ros::Time(0), ros::Duration(3.0));
-    tf::transformMsgToEigen(base_stamped_tf_cam0.transform, base_eigenT_cam0);
-    base_eigenT_cam0_inited = true;
-  }
+  // if (!base_eigenT_cam0_inited) {
+  //   tf2_ros::Buffer tf_buffer;
+  //   tf2_ros::TransformListener tf_listener(tf_buffer);
+  //   // cam0 means gray left camera
+  //   geometry_msgs::TransformStamped base_stamped_tf_cam0;
+  //   base_stamped_tf_cam0 = tf_buffer.lookupTransform(
+  //       "base_link", "camera_gray_left", ros::Time(0), ros::Duration(3.0));
+  //   tf::transformMsgToEigen(base_stamped_tf_cam0.transform, base_eigenT_cam0);
+  //   base_eigenT_cam0_inited = true;
+  // }
 
-  const Eigen::Isometry3d cam0_start_eigenT_cam0_curr =
-      base_eigenT_cam0.inverse() * base_start_eigenT_base_curr *
-      base_eigenT_cam0;
-  const Eigen::Matrix4d cam0_start_eigenTmat_cam0_curr =
-      cam0_start_eigenT_cam0_curr.matrix();
+  // const Eigen::Isometry3d cam0_start_eigenT_cam0_curr =
+  //     base_eigenT_cam0.inverse() * base_start_eigenT_base_curr *
+  //     base_eigenT_cam0;
+  // const Eigen::Matrix4d cam0_start_eigenTmat_cam0_curr =
+  //     cam0_start_eigenT_cam0_curr.matrix();
 
-  // pose: world_T_base_curr
-  for (int r = 0; r < 3; ++r) {
-    for (int c = 0; c < 4; ++c) {
-      visual_odom_result_file << cam0_start_eigenTmat_cam0_curr(r, c) << " ";
-    }
-  }
-  visual_odom_result_file << "\n";
+  // // pose: world_T_base_curr
+  // for (int r = 0; r < 3; ++r) {
+  //   for (int c = 0; c < 4; ++c) {
+  //     visual_odom_result_file << cam0_start_eigenTmat_cam0_curr(r, c) << " ";
+  //   }
+  // }
+  // visual_odom_result_file << "\n";
 }
 
 int main(int argc, char **argv) {
