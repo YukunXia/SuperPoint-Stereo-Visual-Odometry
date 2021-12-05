@@ -2,14 +2,16 @@
   <param name="/use_sim_time" value="false" />
 
   <node pkg="odml_data_processing" type="data_processing_eval_node" name="data_processing_eval_node" output="screen">
-    <param name="device" type="string" value="laptop" />
-    <param name="rosbag_rate" type="double" value="0.6" />
-    <param name="verbose" type="bool" value="false" />
+    <param name="device" type="string" value="jetson" />
+    <param name="rosbag_rate" type="double" value="0.1" />
+    <param name="verbose" type="bool" value="true" />
   </node>
 
   <node pkg="odml_data_processing" type="data_processing_node" name="data_processing_node" output="screen">
     <param name="pre_waiting_time" type="int" value="15" />
   </node>
+
+  <node pkg="odml_data_processing" name="jetson_nano_power_stats_node2" type="jetson_nano_power_stats_node2" output="screen" />
   
   <node pkg="odml_visual_odometry" type="visual_odometry_eval_node" name="visual_odometry_eval_node" output="screen">
   </node>

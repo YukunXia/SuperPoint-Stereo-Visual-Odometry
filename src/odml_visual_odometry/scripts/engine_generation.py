@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 # import rospy
 import rospkg
@@ -11,8 +11,8 @@ rospack = rospkg.RosPack()
 odml_visual_odometry_path = rospack.get_path(
     'odml_visual_odometry') + "/models/"
 model_prefices = ["superpoint_pretrained",
-                  "sp_sparse", "sp_mbv1", "sp_mbv2", "sp_squeeze"]
-device = "workstation"
+                  "sp_sparse", "sp_mbv1", "sp_mbv2", "sp_squeeze", "sp_resnet18"]
+device = "jetson"
 workspaces = {"workstation": 4096, "laptop": 4096, "jetson": 3072}
 onnx_files = set([path.split("/")[-1]
                  for path in glob.glob(odml_visual_odometry_path + "*.onnx")])
@@ -53,6 +53,6 @@ for model_prefix in model_prefices:
                         print("no such precision")
                         continue
                     trt_proc.wait()
-                    time.sleep(1.0)
+                    time.sleep(60.0)
         else:
             print("didn't find onnx file: ", onnx_file_name)

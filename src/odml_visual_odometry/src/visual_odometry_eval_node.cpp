@@ -9,6 +9,7 @@
 #include <ros/ros.h>
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/Image.h>
+#include <std_msgs/Bool.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
@@ -29,6 +30,7 @@ nav_msgs::Odometry visual_odom_msg;
 ros::Publisher visual_odom_msg_pub;
 nav_msgs::Path visual_odom_path;
 ros::Publisher visual_odom_path_pub;
+ros::Publisher energy_updating_signal_pub;
 
 typedef message_filters::sync_policies::ApproximateTime<
     sensor_msgs::Image, sensor_msgs::CameraInfo, sensor_msgs::Image,
@@ -160,6 +162,10 @@ void stereoCallback(
     return;
   }
 
+  std_msgs::Bool energy_updating_signal_msg;
+  energy_updating_signal_msg.data = true;
+  energy_updating_signal_pub.publish(energy_updating_signal_msg);
+
   const auto t0 = std::chrono::system_clock::now();
 
   // MONO8 => CV_8UC1 cv::Mat
@@ -192,6 +198,8 @@ void stereoCallback(
     first_frame = false;
     feature_front_end_ptr->matchDescriptors(MatchType::CURR_LEFT_CURR_RIGHT);
     publishOdometry(cam0_curr_T_cam0_prev);
+    energy_updating_signal_msg.data = false;
+    energy_updating_signal_pub.publish(energy_updating_signal_msg);
     return;
   }
 
@@ -234,6 +242,9 @@ void stereoCallback(
     ROS_INFO("Total time per step = %.4f, FPS = %.4f", total_time_per_step,
              1000.0f / total_time_per_step);
   }
+
+  energy_updating_signal_msg.data = false;
+  energy_updating_signal_pub.publish(energy_updating_signal_msg);
 
   publishOdometry(cam0_curr_T_cam0_prev);
 
@@ -427,7 +438,7 @@ void dataLodaerGoalCallback(
            "reset, and this is the end of the dataLodaerGoalCallback func.\n");
 }
 
-void dataLodaerResultCallback(
+void dataLoaderResultCallback(
     const odml_data_processing::kitti_data_loaderActionResultConstPtr
         &kiti_data_action_result) {
   assert(kiti_data_action_result->result.loading_finished == true);
@@ -462,6 +473,8 @@ int main(int argc, char **argv) {
       "/odml_visual_odometry/visual_odom", 100);
   visual_odom_path_pub = nh.advertise<nav_msgs::Path>(
       "/odml_visual_odometry/visual_odom_path", 100);
+  energy_updating_signal_pub =
+      nh.advertise<std_msgs::Bool>("/energy_updating_signal", 100);
 
   // http://wiki.ros.org/actionlib_tutorials/Tutorials/SimpleActionServer%28ExecuteCallbackMethod%29
   ros::Subscriber data_lodaer_goal_sub =
@@ -469,7 +482,7 @@ int main(int argc, char **argv) {
           "/kitti_loader_action_server/goal", 1000,
           boost::bind(&dataLodaerGoalCallback, _1, &nh));
   ros::Subscriber data_lodaer_result_sub = nh.subscribe(
-      "/kitti_loader_action_server/result", 1000, dataLodaerResultCallback);
+      "/kitti_loader_action_server/result", 1000, dataLoaderResultCallback);
 
   image_transport::ImageTransport it(nh);
   for (int i = 0; i < 2; ++i) {
@@ -478,7 +491,7 @@ int main(int argc, char **argv) {
   }
   pub_inliers = it.advertise("/odml_visual_odometry/inliers_visualization", 10);
 
-  ros::Rate loop_rate(100);
+  ros::Rate loop_rate(500);
   while (ros::ok()) {
     ros::spinOnce();
     loop_rate.sleep();

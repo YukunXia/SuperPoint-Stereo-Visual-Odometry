@@ -19,6 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   eigen_conversions
   tf2_ros
+  rospy
 )
 
 ## System dependencies are found with CMake's conventions
@@ -161,6 +162,12 @@ target_link_libraries(data_processing_node
 add_executable(data_processing_eval_node src/data_processing_eval_node.cpp)
 add_dependencies(data_processing_eval_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(data_processing_eval_node
+  ${catkin_LIBRARIES}
+)
+
+add_executable(jetson_nano_power_stats_node2 src/jetson_nano_power_stats_node2.cpp)
+add_dependencies(jetson_nano_power_stats_node2 ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(jetson_nano_power_stats_node2
   ${catkin_LIBRARIES}
 )
 
