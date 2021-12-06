@@ -93,6 +93,11 @@ void ClassicFeatureFrontEnd::addStereoImagePair(
   projection_matrix_l_ = projection_matrix_l.clone();
   projection_matrix_r_ = projection_matrix_r.clone();
 
+  // input_height_ or input_width_ == 0 means no image size specified
+  if (input_height_ > 0 && input_width_ > 0) {
+    preprocessImageImpl(img_l, projection_matrix_l_);
+    preprocessImageImpl(img_r, projection_matrix_r_);
+  }
   images_dq.push_back(img_l);
   images_dq.push_back(img_r);
 

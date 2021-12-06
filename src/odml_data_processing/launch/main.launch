@@ -2,9 +2,9 @@
   <arg name="is_jetson" default="false" />
   <arg name="is_classic" default="false" />
 
+  <param name="/rosbag_rate" type="double" value="1.0" />
   <node pkg="odml_data_processing" type="data_processing_node" name="data_processing_node" output="screen">
         <param name="pre_waiting_time" type="int" value="2" />
-        <param name="rosbag_rate" type="double" value="0.6666" />
   </node>
   
   <group unless="$(arg is_jetson)">

@@ -146,7 +146,7 @@ include_directories(
 
 
 # cuda
-include_directories(/usr/local/cuda/include)
+include_directories(/usr/local/cuda/include /usr/local/cuda-11.4/targets/x86_64-linux/include)
 link_directories(/usr/local/cuda/lib64)
 # tensorrt
 include_directories(/usr/include/x86_64-linux-gnu/)
