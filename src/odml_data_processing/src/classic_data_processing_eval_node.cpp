@@ -20,7 +20,7 @@ std::vector<std::string> detectors = {"ORB"};
 std::vector<std::string> descriptors = {"ORB"};
 std::vector<std::pair<int, int>> resolutions = {
     {360, 1176}, {240, 784}, {120, 392}};
-std::vector<int> seq_ids = {4};
+std::vector<int> seq_ids = {0, 1, 2, 4, 5, 6, 7, 8, 9, 10};
 
 void dataLodaerResultCallback(
     const odml_data_processing::kitti_data_loaderActionResultConstPtr
@@ -115,7 +115,7 @@ int main(int argc, char **argv) {
                  config_id, description_list.at(config_id).c_str());
         ROS_INFO("[data_processing_eval_node]\ndevice: %s, config_id: %d\n",
                  device.c_str(), config_id);
-        
+
         nh.setParam("/model_id", config_id);
         nh.setParam("/detector_type", detector_list.at(config_id));
         nh.setParam("/descriptor_type", descriptor_list.at(config_id));
