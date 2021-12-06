@@ -158,9 +158,15 @@ target_link_libraries(data_processing_node
 )
 
 
-add_executable(data_processing_eval_node src/data_processing_eval_node.cpp)
-add_dependencies(data_processing_eval_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(data_processing_eval_node
+add_executable(classic_data_processing_eval_node src/classic_data_processing_eval_node.cpp)
+add_dependencies(classic_data_processing_eval_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(classic_data_processing_eval_node
+  ${catkin_LIBRARIES}
+)
+
+add_executable(superpoint_data_processing_eval_node src/superpoint_data_processing_eval_node.cpp)
+add_dependencies(superpoint_data_processing_eval_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(superpoint_data_processing_eval_node
   ${catkin_LIBRARIES}
 )
 

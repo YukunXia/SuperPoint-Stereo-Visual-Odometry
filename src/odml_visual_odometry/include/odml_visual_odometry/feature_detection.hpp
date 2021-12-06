@@ -100,15 +100,18 @@ public:
                   const MatcherType matcher_type,
                   const SelectorType selector_type, const bool cross_check,
                   const float stereo_threshold, const float min_disparity,
-                  const int refinement_degree, const bool verbose)
+                  const int refinement_degree, const bool verbose,
+                  const int input_height, const int input_width)
       : detector_type_(detector_type), descriptor_type_(descriptor_type),
         matcher_type_(matcher_type), selector_type_(selector_type),
         cross_check_(cross_check), stereo_threshold_(stereo_threshold),
         min_disparity_(min_disparity), refinement_degree_(refinement_degree),
-        verbose_(verbose) {}
+        verbose_(verbose), input_height_(input_height),
+        input_width_(input_width) {}
   virtual ~FeatureFrontEnd(){};
   void initMatcher();
   void clearLagecyData();
+  void preprocessImageImpl(cv::Mat &img, cv::Mat &projection_matrix);
   virtual void addStereoImagePair(cv::Mat &img_l, cv::Mat &img_r,
                                   const cv::Mat &projection_matrix_l,
                                   const cv::Mat &projection_matrix_r) = 0;
@@ -142,6 +145,8 @@ protected:
   constexpr static double TIME_INTERVAL = 0.1;
   constexpr static double MAX_ACCELERATION = 8.0;
   constexpr static int IGNORE_FRAME_COUNT = 10;
+  const int input_height_;
+  const int input_width_;
 
   cv::Ptr<cv::DescriptorMatcher> matcher_;
 
@@ -181,7 +186,7 @@ public:
   ClassicFeatureFrontEnd()
       : FeatureFrontEnd(DetectorType::ShiTomasi, DescriptorType::ORB,
                         MatcherType::BF, SelectorType::NN, true, 2.0f, 1.0f, 4,
-                        true) {
+                        true, 120, 392) {
     initDetector();
     initDescriptor();
     initMatcher();
@@ -193,10 +198,12 @@ public:
                          const SelectorType selector_type,
                          const bool cross_check, const float stereo_threshold,
                          const float min_disparity, const int refinement_degree,
-                         const bool verbose)
+                         const bool verbose, const int input_height,
+                         const int input_width)
       : FeatureFrontEnd(detector_type, descriptor_type, matcher_type,
                         selector_type, cross_check, stereo_threshold,
-                        stereo_threshold, refinement_degree, verbose) {
+                        stereo_threshold, refinement_degree, verbose,
+                        input_height, input_width) {
     initDetector();
     initDescriptor();
     initMatcher();
@@ -248,10 +255,10 @@ public:
   SuperPointFeatureFrontEnd()
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
                         MatcherType::BF, SelectorType::NN, true, 2.0f, 1.0f, 4,
-                        true),
+                        true, 120, 392),
         model_name_prefix_("superpoint_pretrained"), model_batch_size_(2),
-        machine_name_("laptop"), trt_precision_(TRT_FP32), input_height_(120),
-        input_width_(392), input_size_(2 * 120 * 392),
+        machine_name_("laptop"), trt_precision_(TRT_FP32),
+        input_size_(2 * 120 * 392),
         output_det_size_(2 * output_det_channel_ * 49 * 15),
         output_desc_size_(2 * output_desc_channel_ * 49 * 15),
         output_width_(49), output_height_(15), conf_thresh_(0.015),
@@ -274,11 +281,10 @@ public:
       : FeatureFrontEnd(DetectorType::SuperPoint, DescriptorType::SuperPoint,
                         matcher_type, selector_type, cross_check,
                         stereo_threshold, min_disparity, refinement_degree,
-                        verbose),
+                        verbose, input_height, input_width),
         model_name_prefix_(model_name_prefix),
         model_batch_size_(model_batch_size), machine_name_(machine_name),
-        trt_precision_(trt_precision), input_height_(input_height),
-        input_width_(input_width),
+        trt_precision_(trt_precision),
         input_size_(model_batch_size * input_height * input_width),
         output_det_size_(model_batch_size * output_det_channel_ * input_height *
                          input_width / 64),
@@ -342,9 +348,6 @@ private:
   // total IO ports, 1 input, 2 final outputs
   static constexpr int BUFFER_SIZE = 3;
 
-  const int input_height_;
-  // input_channel is 1
-  const int input_width_;
   const int input_size_;
 
   // output det size = output det channel num * output width * output height

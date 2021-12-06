@@ -141,59 +141,7 @@ void SuperPointFeatureFrontEnd::preprocessImage(cv::Mat &img,
                                                 const int curr_batch) {
   assert(curr_batch < model_batch_size_);
 
-  int img_rows = img.rows;
-  int img_cols = img.cols;
-
-  // Step 1: Crop image to certain aspect ratio
-  const float real_aspect_ratio =
-      static_cast<float>(img_cols) / static_cast<float>(img_rows);
-  const float expected_aspect_ratio =
-      static_cast<float>(input_width_) / static_cast<float>(input_height_);
-
-  if (expected_aspect_ratio > real_aspect_ratio) {
-    // eg.
-    // expected              real
-    // [             ]       [   ]
-    // [             ]       [   ]
-    // [             ]       [   ]
-    img_rows = img_cols / expected_aspect_ratio;
-    const int img_rows_offset = (img.rows - img_rows) / 2;
-
-    img = img.rowRange(img_rows_offset, img_rows_offset + img_rows);
-
-    // (row => ) y offset in P or K should be decreased
-    // ref: https://ksimek.github.io/2013/08/13/intrinsic/
-    assert((projection_matrix.type() & CV_MAT_DEPTH_MASK) == CV_32F &&
-           (1 + (projection_matrix.type() >> CV_CN_SHIFT)) == 1);
-    projection_matrix.at<float>(1, 2) -= static_cast<float>(img_rows_offset);
-  } else if (expected_aspect_ratio < real_aspect_ratio) {
-    // eg.
-    // expected              real
-    // [             ]       [                           ]
-    // [             ]       [                           ]
-    // [             ]       [                           ]
-    img_cols = img_rows * expected_aspect_ratio;
-    const int img_cols_offset = (img.cols - img_cols) / 2;
-
-    img = img.colRange(img_cols_offset, img_cols_offset + img_cols);
-
-    // (col => ) x offset in P or K should be decreased
-    // ref: https://ksimek.github.io/2013/08/13/intrinsic/
-    assert((projection_matrix.type() & CV_MAT_DEPTH_MASK) == CV_32F &&
-           (1 + (projection_matrix.type() >> CV_CN_SHIFT)) == 1);
-    projection_matrix.at<float>(0, 2) -= static_cast<float>(img_cols_offset);
-  }
-
-  // Step 2: Resize the image
-  cv::resize(img, img, cv::Size(input_width_, input_height_), 0.0, 0.0,
-             cv::INTER_LINEAR);
-  // store image before transforming from 8U to 32F
-  images_dq.push_back(img);
-  // superpoint takes in normalized data ranging from 0.0 to 1.0
-  // From demo_superpoint.py:
-  // > input_image = cv2.cvtColor(input_image, cv2.COLOR_RGB2GRAY)
-  // > input_image = input_image.astype('float')/255.0
-  img.convertTo(img, CV_32FC1, 1.0f / 255.0f);
+  preprocessImageImpl(img, projection_matrix);
 
   // hand over data to input data
   // in this branch (master), only one gray image will be fed into NN. No need
@@ -201,11 +149,15 @@ void SuperPointFeatureFrontEnd::preprocessImage(cv::Mat &img,
   cv::Mat img_fit =
       cv::Mat(input_height_, input_width_, CV_32F,
               input_data_.get() + curr_batch * input_height_ * input_width_);
-  img.copyTo(img_fit);
 
-  const float dst_size_over_src_size =
-      static_cast<float>(input_width_) / static_cast<float>(img_cols);
-  projection_matrix.rowRange(0, 2) *= dst_size_over_src_size;
+  // store image before transforming from 8U to 32F
+  images_dq.push_back(img);
+  // superpoint takes in normalized data ranging from 0.0 to 1.0
+  // From demo_superpoint.py:
+  // > input_image = cv2.cvtColor(input_image, cv2.COLOR_RGB2GRAY)
+  // > input_image = input_image.astype('float')/255.0
+  img.convertTo(img, CV_32FC1, 1.0f / 255.0f);
+  img.copyTo(img_fit);
 }
 
 void SuperPointFeatureFrontEnd::runNeuralNetwork() {

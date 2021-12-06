@@ -271,6 +271,7 @@ void dataLodaerGoalCallback(
         &kiti_data_action_goal,
     ros::NodeHandle *nh) {
 
+  // model id means config id for is_classic cases
   int model_id_now;
   nh->getParam("/model_id", model_id_now);
 
@@ -303,14 +304,18 @@ void dataLodaerGoalCallback(
       nh->getParam("/stereo_threshold", stereo_threshold);
       nh->getParam("/min_disparity", min_disparity);
       nh->getParam("/refinement_degree", refinement_degree);
-      feature_front_end_ptr.release();
+      nh->getParam("/image_height", image_height);
+      nh->getParam("/image_width", image_width);
+      ROS_INFO("[visual odometry eval node]:\n received rows = %d, cols = %d\n",
+               image_height, image_width);
       feature_front_end_ptr = std::make_unique<ClassicFeatureFrontEnd>(
           detector_name_to_type.at(detector_type),
           descriptor_name_to_type.at(descriptor_type),
           matcher_name_to_type.at(matcher_type),
           selector_name_to_type.at(selector_type),
           true, // cross check. only used in KNN mode
-          stereo_threshold, min_disparity, refinement_degree, verbose);
+          stereo_threshold, min_disparity, refinement_degree, verbose,
+          image_height, image_width);
     } else {
       std::string detector_type;
       std::string descriptor_type;
@@ -390,7 +395,7 @@ void dataLodaerGoalCallback(
       ".csv";
   if (is_classic) {
     latency_log_file_name =
-        detector_type + "_" + descriptor_type + latency_log_file_name;
+        kiti_data_action_goal->goal.description + latency_log_file_name;
   } else {
     latency_log_file_name =
         model_name_prefix + "_" + std::to_string(model_batch_size) + "_" +

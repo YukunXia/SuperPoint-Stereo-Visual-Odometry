@@ -348,13 +348,16 @@ int main(int argc, char **argv) {
     nh_private.getParam("stereo_threshold", stereo_threshold);
     nh_private.getParam("min_disparity", min_disparity);
     nh_private.getParam("refinement_degree", refinement_degree);
+    nh_private.getParam("image_height", image_height);
+    nh_private.getParam("image_width", image_width);
     feature_front_end_ptr = std::make_shared<ClassicFeatureFrontEnd>(
         detector_name_to_type.at(detector_type),
         descriptor_name_to_type.at(descriptor_type),
         matcher_name_to_type.at(matcher_type),
         selector_name_to_type.at(selector_type),
         true, // cross check. only used in KNN mode
-        stereo_threshold, min_disparity, refinement_degree, verbose);
+        stereo_threshold, min_disparity, refinement_degree, verbose,
+        image_height, image_width);
   } else {
     std::string detector_type;
     std::string descriptor_type;

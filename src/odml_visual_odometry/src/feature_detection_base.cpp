@@ -65,6 +65,61 @@ void FeatureFrontEnd::clearLagecyData() {
   inliers_pnp.clear();
 }
 
+void FeatureFrontEnd::preprocessImageImpl(cv::Mat &img,
+                                      cv::Mat &projection_matrix) {
+
+  int img_rows = img.rows;
+  int img_cols = img.cols;
+
+  // Step 1: Crop image to certain aspect ratio
+  const float real_aspect_ratio =
+      static_cast<float>(img_cols) / static_cast<float>(img_rows);
+  const float expected_aspect_ratio =
+      static_cast<float>(input_width_) / static_cast<float>(input_height_);
+
+  if (expected_aspect_ratio > real_aspect_ratio) {
+    // eg.
+    // expected              real
+    // [             ]       [   ]
+    // [             ]       [   ]
+    // [             ]       [   ]
+    img_rows = img_cols / expected_aspect_ratio;
+    const int img_rows_offset = (img.rows - img_rows) / 2;
+
+    img = img.rowRange(img_rows_offset, img_rows_offset + img_rows);
+
+    // (row => ) y offset in P or K should be decreased
+    // ref: https://ksimek.github.io/2013/08/13/intrinsic/
+    assert((projection_matrix.type() & CV_MAT_DEPTH_MASK) == CV_32F &&
+           (1 + (projection_matrix.type() >> CV_CN_SHIFT)) == 1);
+    projection_matrix.at<float>(1, 2) -= static_cast<float>(img_rows_offset);
+  } else if (expected_aspect_ratio < real_aspect_ratio) {
+    // eg.
+    // expected              real
+    // [             ]       [                           ]
+    // [             ]       [                           ]
+    // [             ]       [                           ]
+    img_cols = img_rows * expected_aspect_ratio;
+    const int img_cols_offset = (img.cols - img_cols) / 2;
+
+    img = img.colRange(img_cols_offset, img_cols_offset + img_cols);
+
+    // (col => ) x offset in P or K should be decreased
+    // ref: https://ksimek.github.io/2013/08/13/intrinsic/
+    assert((projection_matrix.type() & CV_MAT_DEPTH_MASK) == CV_32F &&
+           (1 + (projection_matrix.type() >> CV_CN_SHIFT)) == 1);
+    projection_matrix.at<float>(0, 2) -= static_cast<float>(img_cols_offset);
+  }
+
+  // Step 2: Resize the image
+  cv::resize(img, img, cv::Size(input_width_, input_height_), 0.0, 0.0,
+             cv::INTER_LINEAR);
+
+  const float dst_size_over_src_size =
+      static_cast<float>(input_width_) / static_cast<float>(img_cols);
+  projection_matrix.rowRange(0, 2) *= dst_size_over_src_size;
+}
+
 // entering into this function means there's at least 2 time frames
 // TODO: add assertion to check
 void FeatureFrontEnd::solveStereoOdometry(

@@ -9,5 +9,13 @@
         <param name="min_disparity" type="double" value="2.0" />
         <param name="refinement_degree" type="int" value="4" />
         <param name="verbose" type="bool" value="false" />
+        <param name="image_height" type="int" value="0" />
+        <!-- <param name="image_height" type="int" value="360" /> -->
+        <!-- <param name="image_height" type="int" value="240" /> -->
+        <!-- <param name="image_height" type="int" value="120" /> -->
+        <param name="image_width" type="int" value="0" />
+        <!-- <param name="image_width" type="int" value="1176" /> -->
+        <!-- <param name="image_width" type="int" value="784" /> -->
+        <!-- <param name="image_width" type="int" value="392" /> -->
     </node>
 </launch>
