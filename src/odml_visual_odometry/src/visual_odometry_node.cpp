@@ -38,20 +38,20 @@ typedef message_filters::sync_policies::ApproximateTime<
 //                                                         sensor_msgs::CameraInfo>
 //     MonoSyncPolicy;
 
-std::shared_ptr<message_filters::Subscriber<sensor_msgs::Image>>
+std::unique_ptr<message_filters::Subscriber<sensor_msgs::Image>>
     sub_image00_ptr = nullptr;
-std::shared_ptr<message_filters::Subscriber<sensor_msgs::CameraInfo>>
+std::unique_ptr<message_filters::Subscriber<sensor_msgs::CameraInfo>>
     sub_camera00_ptr = nullptr;
-std::shared_ptr<message_filters::Subscriber<sensor_msgs::Image>>
+std::unique_ptr<message_filters::Subscriber<sensor_msgs::Image>>
     sub_image01_ptr = nullptr;
-std::shared_ptr<message_filters::Subscriber<sensor_msgs::CameraInfo>>
+std::unique_ptr<message_filters::Subscriber<sensor_msgs::CameraInfo>>
     sub_camera01_ptr = nullptr;
 
-std::shared_ptr<message_filters::Synchronizer<StereoSyncPolicy>>
+std::unique_ptr<message_filters::Synchronizer<StereoSyncPolicy>>
     stereo_sync_ptr = nullptr;
 
-std::shared_ptr<tf2_ros::Buffer> tf_buffer_ptr;
-std::shared_ptr<tf2_ros::TransformListener> tf_listener;
+std::unique_ptr<tf2_ros::Buffer> tf_buffer_ptr;
+std::unique_ptr<tf2_ros::TransformListener> tf_listener;
 // cam0 means gray left camera
 bool base_stamped_tf_cam0_inited = false;
 geometry_msgs::TransformStamped base_stamped_tf_cam0;
@@ -62,7 +62,7 @@ cv_bridge::CvImagePtr cv_ptr_r;
 bool first_frame = true;
 tf2::Transform world_T_base_curr = tf2::Transform::getIdentity();
 
-std::shared_ptr<FeatureFrontEnd> feature_front_end_ptr;
+std::unique_ptr<FeatureFrontEnd> feature_front_end_ptr;
 std::array<image_transport::Publisher, MATCH_TYPE_NUM> pub_matches_img_list;
 image_transport::Publisher pub_inliers;
 
@@ -100,8 +100,8 @@ cameraInfoToPMatrix(const sensor_msgs::CameraInfo::ConstPtr &camera_info_msg) {
 void publishOdometry(tf2::Transform cam0_curr_T_cam0_prev) {
 
   if (!base_stamped_tf_cam0_inited) {
-    tf_buffer_ptr = std::make_shared<tf2_ros::Buffer>();
-    tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_ptr);
+    tf_buffer_ptr = std::make_unique<tf2_ros::Buffer>();
+    tf_listener = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_ptr);
     base_stamped_tf_cam0 = tf_buffer_ptr->lookupTransform(
         "base_link", "camera_gray_left", ros::Time(0), ros::Duration(3.0));
     tf2::fromMsg(base_stamped_tf_cam0.transform, base_T_cam0);
@@ -305,7 +305,7 @@ void dataLodaerGoalCallback(
   first_frame = true;
 
   stereo_sync_ptr =
-      std::make_shared<message_filters::Synchronizer<StereoSyncPolicy>>(
+      std::make_unique<message_filters::Synchronizer<StereoSyncPolicy>>(
           StereoSyncPolicy(20), *sub_image00_ptr, *sub_camera00_ptr,
           *sub_image01_ptr, *sub_camera01_ptr);
   stereo_sync_ptr->setInterMessageLowerBound(ros::Duration(0.09));
@@ -350,7 +350,7 @@ int main(int argc, char **argv) {
     nh_private.getParam("refinement_degree", refinement_degree);
     nh_private.getParam("image_height", image_height);
     nh_private.getParam("image_width", image_width);
-    feature_front_end_ptr = std::make_shared<ClassicFeatureFrontEnd>(
+    feature_front_end_ptr = std::make_unique<ClassicFeatureFrontEnd>(
         detector_name_to_type.at(detector_type),
         descriptor_name_to_type.at(descriptor_type),
         matcher_name_to_type.at(matcher_type),
@@ -393,7 +393,7 @@ int main(int argc, char **argv) {
                   image_height, image_width);
         return 1;
       }
-      feature_front_end_ptr = std::make_shared<SuperPointFeatureFrontEnd>(
+      feature_front_end_ptr = std::make_unique<SuperPointFeatureFrontEnd>(
           matcher_name_to_type.at(matcher_type),
           selector_name_to_type.at(selector_type),
           true, // cross check. only used in KNN mode
@@ -412,16 +412,16 @@ int main(int argc, char **argv) {
 
   // TODO: try compressed image
   sub_image00_ptr =
-      std::make_shared<message_filters::Subscriber<sensor_msgs::Image>>(
+      std::make_unique<message_filters::Subscriber<sensor_msgs::Image>>(
           nh, "/kitti/camera_gray_left/image_raw", 10);
   sub_camera00_ptr =
-      std::make_shared<message_filters::Subscriber<sensor_msgs::CameraInfo>>(
+      std::make_unique<message_filters::Subscriber<sensor_msgs::CameraInfo>>(
           nh, "/kitti/camera_gray_left/camera_info", 10);
   sub_image01_ptr =
-      std::make_shared<message_filters::Subscriber<sensor_msgs::Image>>(
+      std::make_unique<message_filters::Subscriber<sensor_msgs::Image>>(
           nh, "/kitti/camera_gray_right/image_raw", 10);
   sub_camera01_ptr =
-      std::make_shared<message_filters::Subscriber<sensor_msgs::CameraInfo>>(
+      std::make_unique<message_filters::Subscriber<sensor_msgs::CameraInfo>>(
           nh, "/kitti/camera_gray_right/camera_info", 10);
 
   visual_odom_msg_pub = nh.advertise<nav_msgs::Odometry>(

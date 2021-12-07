@@ -69,27 +69,27 @@ void SuperPointFeatureFrontEnd::loadTrtEngine() {
   sample::Logger g_logger;
   runtime_ = std::unique_ptr<nvinfer1::IRuntime,
                              std::function<void(nvinfer1::IRuntime *)>>(
-      nvinfer1::createInferRuntime(g_logger), [](nvinfer1::IRuntime *p) {
+      nvinfer1::createInferRuntime(g_logger), [](nvinfer1::IRuntime *ptr) {
         ROS_INFO("runtime_ destructor");
-        if (p)
-          p->destroy();
+        if (ptr)
+          ptr->destroy();
       });
   assert(runtime_ != nullptr);
   engine_ = std::unique_ptr<nvinfer1::ICudaEngine,
                             std::function<void(nvinfer1::ICudaEngine *)>>(
       runtime_->deserializeCudaEngine(trt_model_stream.get(), trt_stream_size),
-      [](nvinfer1::ICudaEngine *p) {
-        if (p)
-          p->destroy();
+      [](nvinfer1::ICudaEngine *ptr) {
+        if (ptr)
+          ptr->destroy();
       });
   assert(engine_ != nullptr);
   context_ =
       std::unique_ptr<nvinfer1::IExecutionContext,
                       std::function<void(nvinfer1::IExecutionContext *)>>(
           engine_->createExecutionContext(),
-          [](nvinfer1::IExecutionContext *p) {
-            if (p) {
-              p->destroy();
+          [](nvinfer1::IExecutionContext *ptr) {
+            if (ptr) {
+              ptr->destroy();
             }
           });
   assert(context_ != nullptr);

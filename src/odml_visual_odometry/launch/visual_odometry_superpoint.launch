@@ -12,9 +12,9 @@
         <!-- <param name="image_width" type="int" value="784" /> -->
         <!-- <param name="image_width" type="int" value="392" /> -->
         <!-- <param name="model_name_prefix" type="string" value="superpoint_pretrained" /> -->
-        <param name="model_name_prefix" type="string" value="sp_mbv1" />
+        <param name="model_name_prefix" type="string" value="sp_resnet18" />
         <param name="model_batch_size" type="int" value="1" />
-        <param name="machine_name" type="string" value="workstation" />
+        <param name="machine_name" type="string" value="laptop" />
         <param name="trt_precision" type="string" value="FP32" />
         <param name="conf_thresh" type="double" value="0.015" />
         <param name="dist_thresh" type="int" value="4" />

@@ -157,19 +157,6 @@ target_link_libraries(data_processing_node
   ${catkin_LIBRARIES} Eigen3::Eigen stdc++fs
 )
 
-
-add_executable(classic_data_processing_eval_node src/classic_data_processing_eval_node.cpp)
-add_dependencies(classic_data_processing_eval_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(classic_data_processing_eval_node
-  ${catkin_LIBRARIES}
-)
-
-add_executable(superpoint_data_processing_eval_node src/superpoint_data_processing_eval_node.cpp)
-add_dependencies(superpoint_data_processing_eval_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(superpoint_data_processing_eval_node
-  ${catkin_LIBRARIES}
-)
-
 #############
 ## Install ##
 #############
