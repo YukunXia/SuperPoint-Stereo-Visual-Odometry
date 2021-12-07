@@ -59,6 +59,9 @@ int main(int argc, char **argv) {
   // nh.setParam("/model_id", 0);
   for (const auto &detector : detectors) {
     for (const auto &descriptor : descriptors) {
+      if (descriptor != detector)
+        continue;
+
       for (const auto &resolution : resolutions) {
         detector_list.push_back(detector);
         descriptor_list.push_back(descriptor);
@@ -115,7 +118,7 @@ int main(int argc, char **argv) {
                  config_id, description_list.at(config_id).c_str());
         ROS_INFO("[data_processing_eval_node]\ndevice: %s, config_id: %d\n",
                  device.c_str(), config_id);
-        
+
         nh.setParam("/model_id", config_id);
         nh.setParam("/detector_type", detector_list.at(config_id));
         nh.setParam("/descriptor_type", descriptor_list.at(config_id));

@@ -108,7 +108,7 @@ void publishOdometry(tf2::Transform cam0_curr_T_cam0_prev) {
     tf_buffer_ptr = std::make_shared<tf2_ros::Buffer>();
     tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_ptr);
     base_stamped_tf_cam0 = tf_buffer_ptr->lookupTransform(
-        "base_link", "camera_gray_left", ros::Time(0), ros::Duration(3.0));
+        "base_link", "camera_gray_left", ros::Time(0), ros::Duration(15.0));
     tf2::fromMsg(base_stamped_tf_cam0.transform, base_T_cam0);
     base_stamped_tf_cam0.header.frame_id = "base";
     base_stamped_tf_cam0.child_frame_id = "cam0";

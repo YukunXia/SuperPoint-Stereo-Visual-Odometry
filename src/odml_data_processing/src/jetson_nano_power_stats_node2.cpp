@@ -54,6 +54,10 @@ void kittiGoalCallback(
                              std::to_string(image_width) + "_" + trt_precision +
                              energy_log_file_name;
     }
+  } else {
+    energy_log_file_name =
+        ros::package::getPath("odml_data_processing") + "/kitti_energy_logs/" +
+        kiti_data_action_goal->goal.description + energy_log_file_name;
   }
 
   ROS_INFO("[jetson_nano_power_stats_node2]:\nenergy_log_file_name = %s\n",
