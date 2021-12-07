@@ -16,8 +16,8 @@ std::vector<int> width_list;
 std::vector<int> height_list;
 std::vector<std::string> description_list;
 
-std::vector<std::string> detectors = {"SIFT"};
-std::vector<std::string> descriptors = {"SIFT"};
+std::vector<std::string> detectors = {"ORB"};
+std::vector<std::string> descriptors = {"ORB"};
 std::vector<std::pair<int, int>> resolutions = {
     {360, 1176}, {240, 784}, {120, 392}};
 std::vector<int> seq_ids = {0, 1, 2, 4, 5, 6, 7, 8, 9, 10};
